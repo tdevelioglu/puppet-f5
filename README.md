@@ -5,15 +5,14 @@ Based off the f5 module from puppetlabs (https://github.com/puppetlabs/puppetlab
 
 This is based on the puppetlabs-f5 module, amongst others it adds the following extras:
 
-- Support for F5 V11+
-  (As of writing the puppetlabs-f5 module also has added V11 support)
-
-- Prefetch methods lower the total number of required api calls and enable  purging and puppet resource.
+- Support for F5 V11+. **As of writing the puppetlabs-f5 module also has added V11 support**
+- Prefetch methods lower the total number of required api calls and enable purging and puppet resource.
 - F5 transactions and provider flush methods for atomic changes (where possible).
 - Partition support per resource
 - Autorequiring dependancies
 
 Supported resources:
+
 - f5_irule
 - f5_node
 - f5_partition
@@ -24,6 +23,7 @@ Supported resources:
 ## Usage
 
 1. Install the F5 icontrol gem (found under files).
+
         gem install ./f5-icontrol-11.4.1.0.gem
 
 2. Create F5 Device configuration file in $confdir/device.conf (typically /etc/puppet/device.conf or /etc/puppetlabs/puppet/device.conf)
@@ -42,10 +42,10 @@ Supported resources:
             lb_method       => 'ratio_member',
             health_monitors => ['/Common/https', '/Common/http'],
             members         => [
-              {'address' => '/Common/pc114xml-01', 'port' => 80},
-              {'address' => '/Common/pc114xml-02', 'port' => 80},
-              {'address' => '/Common/pc114xml-03', 'port' => 80},
-              {'address' => '/Common/pc114xml-04', 'port' => 80},
+              {'address' => '/TestPartition2000/TestNode2001', 'port' => 80},
+              {'address' => '/TestPartition2000/TestNode2002', 'port' => 80},
+              {'address' => '/TestPartition2000/TestNode2003', 'port' => 80},
+              {'address' => '/TestPartition2000/TestNode2004', 'port' => 80},
             ]
           }
         
@@ -74,6 +74,7 @@ Supported resources:
           }
         
           f5_irule { '/TestPartition2000/TestRule2000':
+            definition => '#Empty';
           }
         
           f5_virtualserver { '/TestPartition2000/TestVirtualServer2000':
