@@ -1,0 +1,8 @@
+name    'tdevelioglu-f5'
+version '0.1.0'
+source 'git@github.com:tdevelioglu/puppet-f5.git'
+author 'Taylan Develioglu'
+license 'Apache License, Version 2.0'
+summary 'Manage F5 resources'
+description 'Puppet type/provider for managing F5 device configuration.'
+project_page 'https://github.com/tdevelioglu/puppet-f5'
