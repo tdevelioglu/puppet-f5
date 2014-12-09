@@ -49,9 +49,6 @@ class Puppet::Util::NetworkDevice::F5::Device
   def facts
     @facts ||= Puppet::Util::NetworkDevice::F5::Facts.new(@transport)
     facts = @facts.retrieve
-
-    # inject F5 partition info.
-    facts['partition'] = @partition
     facts
   end
 end
