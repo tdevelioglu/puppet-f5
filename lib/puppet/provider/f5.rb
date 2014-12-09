@@ -1,4 +1,5 @@
 require 'puppet/util/network_device/f5/device'
+require 'base64'
 
 class Puppet::Provider::F5 < Puppet::Provider
 
@@ -65,7 +66,7 @@ class Puppet::Provider::F5 < Puppet::Provider
       continue = false if (chunk.chain_type == 'FILE_LAST') || (chunk.chain_type == 'FILE_FIRST_AND_LAST')
     end
 
-    content
+    Base64.decode(content)
   end
 
   def upload_file(filename, content)
@@ -85,7 +86,7 @@ class Puppet::Provider::F5 < Puppet::Provider
         end
       end
 
-      chunk = content[0..chunk_size-1]
+      chunk = Base64.encode(content[0..chunk_size-1])
       transport['System.ConfigSync'].upload_file(filename, { :file_data => chunk, :chain_type => chain_type })
 
       file_offset += chunk_size

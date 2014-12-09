@@ -13,6 +13,7 @@ This is based on the puppetlabs-f5 module, amongst others it adds the following 
 
 Supported resources:
 
+- f5_file
 - f5_irule
 - f5_node
 - f5_partition
