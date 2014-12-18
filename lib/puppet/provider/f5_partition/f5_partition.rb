@@ -103,37 +103,37 @@ Puppet::Type.type(:f5_partition).provide(:f5_partition, :parent => Puppet::Provi
       return
     end
 
-    begin
-      transport['System.Session'].call(:start_transaction)
-
-      if @property_flush[:ensure] == :create
-        transport[wsdl].call(:create, message: folder)
-      end
-
-      unless resource[:description].nil?
-        transport[wsdl].call(:set_description, message: folder.merge({ descriptions: { item: resource[:description] } }) )
-      end
-  
-      unless resource[:device_group].nil?
-        transport[wsdl].call(:set_device_group, message: folder.merge({ groups: { item: resource[:device_group] } }) )
-      end
-  
-      unless resource[:traffic_group].nil?
-        transport[wsdl].call(:set_traffic_group, message: folder.merge({ groups: { item: resource[:traffic_group] } }) )
-      end
-
-      transport['System.Session'].call(:submit_transaction)
-    rescue Exception
-      begin
-        transport['System.Session'].call(:rollback_transaction)
-      rescue Exception => e
-        if !e.message.include?("No transaction is open to roll back")
-          raise
-        end
-      end
-      raise
+    if @property_flush[:ensure] == :create
+      transport[wsdl].call(:create, message: folder)
     end
 
+    # If there are properties to flush
+    if !@property_flush.clone.map{ |k| k.delete(:ensure) }.empty?
+      begin
+        transport['System.Session'].call(:start_transaction)
+        unless resource[:description].nil?
+          transport[wsdl].call(:set_description, message: folder.merge({ descriptions: { item: resource[:description] } }) )
+        end
+    
+        unless resource[:device_group].nil?
+          transport[wsdl].call(:set_device_group, message: folder.merge({ groups: { item: resource[:device_group] } }) )
+        end
+    
+        unless resource[:traffic_group].nil?
+          transport[wsdl].call(:set_traffic_group, message: folder.merge({ groups: { item: resource[:traffic_group] } }) )
+        end
+        transport['System.Session'].call(:submit_transaction)
+      rescue Exception
+        begin
+          transport['System.Session'].call(:rollback_transaction)
+        rescue Exception => e
+          if !e.message.include?("No transaction is open to roll back")
+            raise
+          end
+        end
+        raise
+      end
+    end
     @property_hash = resource.to_hash
   end
 end
