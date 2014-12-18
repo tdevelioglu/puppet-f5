@@ -71,8 +71,11 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
   def self.prefetch(resources)
     f5_poolmembers = instances
 
-    resources.keys.each do |name|
-      if provider = f5_poolmembers.find{ |poolmember| poolmember.name == name }
+    resources.each do |name, resource|
+      if provider = f5_poolmembers.find do |poolmember|
+        "#{poolmember.pool}:#{poolmember.name}:#{poolmember.port}" == resource.title
+      end
+        debug("Prefetched: #{resources[name]}")
         resources[name].provider = provider
       end
     end
