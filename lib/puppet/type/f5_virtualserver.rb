@@ -30,8 +30,6 @@ Puppet::Type.newtype(:f5_virtualserver) do
 
   newproperty(:default_pool) do
     desc "The virtualserver default pool"
-
-    defaultto ""
   end
 
   newproperty(:port) do
@@ -51,14 +49,10 @@ Puppet::Type.newtype(:f5_virtualserver) do
 
   newproperty(:fallback_persistence_profile) do
     desc "The virtualserver fallback persistence profile"
-
-    defaultto ""
   end
 
   newproperty(:persistence_profile) do
     desc "The virtualserver default persistence profile"
-
-    defaultto ""
   end
 
   newproperty(:protocol) do
@@ -76,6 +70,10 @@ Puppet::Type.newtype(:f5_virtualserver) do
       unless valid_protocols.include?(value)
         fail Puppet::Error, "Parameter '#{self.name}' must be one of: #{valid_protocols.inspect}, not '#{value}'"
       end
+    end
+
+    munge do |value|
+      value.upcase
     end
 
     defaultto "TCP"
@@ -97,8 +95,6 @@ Puppet::Type.newtype(:f5_virtualserver) do
     def should_to_s(newvalue)
       newvalue.inspect
     end
-
-    defaultto []
   end
 
   newproperty(:type) do
@@ -145,11 +141,11 @@ Puppet::Type.newtype(:f5_virtualserver) do
   end
 
   autorequire(:f5_profile) do
-    self[:profiles] unless self[:profiles].empty?
+    self[:profiles] unless (self[:profiles].nil? self[:profiles].empty?)
   end
 
   autorequire(:f5_pool) do
-    self[:default_pool] unless self[:default_pool].empty?
+    self[:default_pool] unless (self[:default_pool].nil? || self[:default_pool].empty?)
   end
 
 end

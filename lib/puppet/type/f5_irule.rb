@@ -20,12 +20,18 @@ Puppet::Type.newtype(:f5_irule) do
 
   newproperty(:definition) do
     desc "The definition of the iRule."
-
-    defaultto ''
   end
 
   autorequire(:f5_partition) do
     File.dirname(self[:name]) 
+  end
+
+  validate do
+    if self[:ensure] == :present
+      if self[:definition].nil?
+        fail Puppet::Error, "Parameter 'definition' must be defined"
+      end
+    end
   end
 
 end

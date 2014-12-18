@@ -1,6 +1,6 @@
 require 'uri'
-require 'f5-icontrol'
 require 'puppet/util/network_device/f5/facts'
+require 'puppet/util/network_device/f5/transport'
 
 class Puppet::Util::NetworkDevice::F5::Device
 
@@ -28,7 +28,7 @@ class Puppet::Util::NetworkDevice::F5::Device
       'Management.Partition',
       'Management.SNMPConfiguration',
       'Management.UserManagement',
-      'Networking.RouteTable',
+      'Networking.RouteTableV2',
       'System.ConfigSync',
       'System.Inet',
       'System.Session',
@@ -36,13 +36,13 @@ class Puppet::Util::NetworkDevice::F5::Device
     ]
 
     Puppet.debug("Puppet::Device::F5: connecting to F5 device #{@url.host}.")
-    @transport ||= F5::IControl.new(@url.host, @url.user, @url.password, modules).get_interfaces
+    @transport ||= Puppet::Util::NetworkDevice::F5::Transport.new(@url.host, @url.user, @url.password, modules).get_interfaces
 
     Puppet.debug("Puppet::Device::F5: raising transaction timeout to 15s.")
-    transport['System.Session'].set_transaction_timeout(15)
+    transport['System.Session'].call(:set_transaction_timeout, message: { timeout: 15 })
 
     Puppet.debug("Puppet::Device::F5: setting active partition to /.")
-    transport['System.Session'].set_active_folder('/')
+    transport['System.Session'].call(:set_active_folder, message: { folder: '/' })
 
   end
 

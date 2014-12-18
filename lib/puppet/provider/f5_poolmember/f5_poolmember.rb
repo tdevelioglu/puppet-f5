@@ -5,9 +5,8 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
 
   mk_resource_methods
 
-  confine :feature => :posix
-  confine :feature => :ruby_f5_icontrol
-  defaultfor :feature => :posix
+  confine :feature => :ruby_savon
+  defaultfor :feature => :ruby_savon
 
   def initialize(value={})
     super(value)
@@ -22,56 +21,50 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
     self.class.wsdl
   end
 
+  def self.debug(msg)
+    Puppet.debug("(F5_Poolmember): #{msg}")
+  end
+
+  def debug(msg)
+    self.class.debug(msg)
+  end
+
   def self.instances
+    instances = []
     # Getting all poolmember info from an F5 is not transactional. But we're safe as
     # long as we are the only one doing writes.
     #
-    Puppet.debug("Puppet::Device::F5: setting active partition to: /")
-    transport['System.Session'].set_active_folder('/')
-    transport['System.Session'].set_recursive_query_state('STATE_ENABLED')
+    debug("Puppet::Device::F5: setting active partition to: /")
+    transport['System.Session'].call(:set_active_folder, message: { folder: '/' })
+    transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
 
-    pools           = transport[wsdl].get_list
-    all_poolmembers = transport[wsdl].get_member_v2(pools)
+    pools   = transport[wsdl].get(:get_list)
+    members = transport[wsdl].get(:get_member_v2, { pool_names: { item: pools } })
+    getmsg  = { pool_names: { item: pools }, members: { item: members } }
 
-    # Th F5 api  does not handle empty lists in sequences properly (it skips them and ends up
-    # matching the wrong list with the wrong pool).
-    instances = []
-    pools.each_with_index do |pool, index|
-      if all_poolmembers[index].empty?
-        next
-      end
+    connection_limits = arraywrap(transport[wsdl].get(:get_member_connection_limit, getmsg))
+    descriptions      = arraywrap(transport[wsdl].get(:get_member_description, getmsg))
+    priority_groups   = arraywrap(transport[wsdl].get(:get_member_priority, getmsg))
+    rate_limits       = arraywrap(transport[wsdl].get(:get_member_rate_limit, getmsg))
+    ratios            = arraywrap(transport[wsdl].get(:get_member_ratio, getmsg))
 
-      poolmembers = all_poolmembers[index]
-      connection_limits = transport[wsdl].get_member_connection_limit([pool],
-        [poolmembers])[0]
-
-      descriptions = transport[wsdl].get_member_description([pool],
-        [poolmembers])[0]
-
-      priority_groups = transport[wsdl].get_member_priority([pool],
-        [poolmembers])[0]
-
-      rate_limits = transport[wsdl].get_member_rate_limit([pool],
-        [poolmembers])[0]
-
-      ratios = transport[wsdl].get_member_ratio([pool],
-        [poolmembers])[0]
-
-      poolmembers.each_with_index do |member, indexx|
-        instances << new( 
-          :name             => member['address'],
-          :pool             => pool,
-          :port             => member['port'],
+    members.each_with_index do |dict, idx1|
+      dict.nil? ? next : pms = arraywrap(dict[:item])
+      pms.each_with_index do |pm, idx2|
+        instances << new(
           :ensure           => :present,
-          :connection_limit => connection_limits[indexx],
-          :description      => descriptions[indexx],
-          :priority_group   => priority_groups[indexx],
-          :rate_limit       => rate_limits[indexx],
-          :ratio            => ratios[indexx],
+          :name             => pm[:address],
+          :pool             => pools[idx1],
+          :port             => pm[:port],
+          :connection_limit => arraywrap(connection_limits[idx1][:item])[idx2],
+          :description      => arraywrap(descriptions[idx1][:item])[idx2].nil? ?
+            "" : arraywrap(descriptions[idx1][:item])[idx2],
+          :priority_group   => arraywrap(priority_groups[idx1][:item])[idx2],
+          :rate_limit       => arraywrap(rate_limits[idx1][:item])[idx2],
+          :ratio            => arraywrap(ratios[idx1][:item])[idx2],
         )
       end
     end
-
     instances
   end
 
@@ -124,53 +117,61 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
 
   def flush
     partition   = File.dirname(resource[:name])
-    addressport = { "address" => resource[:name], "port" => resource[:port] }
+    addressport = { address: resource[:name], port: resource[:port] }
+    poolmember  = { pool_names: { item: resource[:pool] }, members: { item: { item: addressport } } }
 
-    Puppet.debug("Puppet::Device::F5: setting active partition to: #{partition}")
-    transport['System.Session'].set_active_folder(partition)
+    debug("Puppet::Device::F5: setting active partition to: #{partition}")
+    transport['System.Session'].call(:set_active_folder, message: { folder: partition })
 
     if @property_flush[:ensure] == :destroy
-      transport[wsdl].remove_member_v2([resource[:pool]], [[addressport]])
+      transport[wsdl].call(:remove_member_v2, message: poolmember)
       return
     end
 
     begin
-      transport['System.Session'].start_transaction
+      transport['System.Session'].call(:start_transaction)
 
       if @property_flush[:ensure] == :create
-        transport[wsdl].add_member_v2([resource[:pool]], [[addressport]])
+        transport[wsdl].call(:add_member_v2, message: poolmember)
       end
 
       unless @property_flush[:connection_limit].nil?
-        transport[wsdl].set_member_connection_limit([resource[:pool]], [[addressport]],
-          [[@property_flush[:connection_limit]]])
+        message = poolmember.merge(limits: { item: { item: @property_flush[:connection_limit] } })
+        transport[wsdl].call(:set_member_connection_limit, message: message)
       end
   
       unless @property_flush[:description].nil?
-        transport[wsdl].set_member_description([resource[:pool]], [[addressport]],
-          [[@property_flush[:description]]])
+        message = poolmember.merge(descriptions: { item: { item: @property_flush[:description] } })
+        transport[wsdl].call(:set_member_description, message: message)
       end
 
       unless @property_flush[:priority_group].nil?
-        transport[wsdl].set_member_priority([resource[:pool]], [[addressport]],
-          [[@property_flush[:priority_group]]])
+        message = poolmember.merge(priorities: { item: { item:  @property_flush[:priority_group] } })
+        transport[wsdl].call(:set_member_priority, message: message)
       end
 
       unless @property_flush[:rate_limit].nil?
-        transport[wsdl].set_member_rate_limit([resource[:pool]], [[addressport]],
-          [[@property_flush[:rate_limit]]])
+        message = poolmember.merge(limits: { item: { item: @property_flush[:rate_limit] } })
+        transport[wsdl].call(:set_member_rate_limit, message: message)
       end
   
       unless @property_flush[:ratio].nil?
-        transport[wsdl].set_member_ratio([resource[:pool]], [[addressport]], [[@property_flush[:ratio]]])
+        message = poolmember.merge(ratios: { item: { item: @property_flush[:ratio] } })
+        transport[wsdl].call(:set_member_ratio, message: message)
       end
 
-      transport['System.Session'].submit_transaction
+      transport['System.Session'].call(:submit_transaction)
     rescue Exception => e
-      raise e
-      transport['System.Session'].rollback_transaction
+      begin
+        transport['System.Session'].call(:rollback_transaction)
+      rescue Exception => e
+        if !e.message.include?("No transaction is open to roll back")
+          raise
+        end
+      end
+      raise
     end
 
+    @property_hash = resource.to_hash
   end
-
 end

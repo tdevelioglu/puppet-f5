@@ -6,10 +6,10 @@ Based off the f5 module from puppetlabs (https://github.com/puppetlabs/puppetlab
 This is based on the puppetlabs-f5 module, amongst others it adds the following extras:
 
 - Support for F5 V11+. **As of writing the puppetlabs-f5 module also has added V11 support**
-- Prefetch methods lower the total number of required api calls and enable purging and puppet resource.
+- Prefetch methods.
 - F5 transactions and provider flush methods for atomic changes (where possible).
-- Partition support per resource
-- Autorequiring dependancies
+- Partition support per resource.
+- Autorequirement of dependencies.
 
 Supported resources:
 
@@ -23,17 +23,13 @@ Supported resources:
 
 ## Usage
 
-1. Install the F5 icontrol gem (found under files).
-
-        gem install ./f5-icontrol-11.4.1.0.gem
-
-2. Create F5 Device configuration file in $confdir/device.conf (typically /etc/puppet/device.conf or /etc/puppetlabs/puppet/device.conf)
+1. Create F5 Device configuration file in $confdir/device.conf (typically /etc/puppet/device.conf or /etc/puppetlabs/puppet/device.conf)
 
         [f5.example.com]
         type f5
         url https://username:password@address/
 
-3. Create the corresponding node configuration on the puppet master site.pp:
+2. Create the corresponding node configuration on the puppet master site.pp:
 
         node f5.example.com {
 
@@ -87,10 +83,10 @@ Supported resources:
           }
         }
 
-4. Execute puppet device command:
+3. Execute puppet device command:
 
         $ puppet device
 
-5. To test from commandline:
+4. To test from commandline:
 
         $ FACTER_url=https://admin:admin@f5.example.com/ puppet resource f5_irule

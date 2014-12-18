@@ -21,11 +21,11 @@ Puppet::Type.newtype(:f5_pool) do
   end
 
   newparam(:membership) do
-    desc "Whether the list of members should be considered the complete list
-    (inclusive) or the minimum list of members that should in the pool.
+    desc "Whether the list of members should be considered the exact or the
+    minimum list of members that should in the pool.
     Defaults to `minimum`."
 
-    newvalues(:inclusive, :minimum)
+    newvalues(:exact, :minimum)
 
     defaultto :minimum
   end
@@ -77,7 +77,7 @@ Puppet::Type.newtype(:f5_pool) do
       should = @should
       is = retrieve
 
-      if @resource[:membership] != :inclusive
+      if @resource[:membership] != :exact
         should += is if is.is_a?(Array)
       end
 
@@ -105,7 +105,7 @@ Puppet::Type.newtype(:f5_pool) do
     end
 
     munge do |value|
-      { "address" => value["address"], "port" => Integer(value["port"]) }
+      { address: value["address"], port: value["port"] }
     end
 
     defaultto []
@@ -121,8 +121,6 @@ Puppet::Type.newtype(:f5_pool) do
     def insync?(is)
       is.sort == @should.sort
     end
-
-    defaultto []
   end
 
   autorequire(:f5_partition) do

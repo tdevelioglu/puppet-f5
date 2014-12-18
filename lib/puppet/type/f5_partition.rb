@@ -45,24 +45,4 @@ Puppet::Type.newtype(:f5_partition) do
     end
   end
 
-  newproperty(:is_device_group_inherited) do
-    desc "The device group for the specified partition."
-
-    validate do |value|
-      unless value.nil?
-        fail Puppet::Error, "Property 'is_device_group_inherited' is read-only, can not set to '#{value}'"
-      end
-    end
-  end
-
-  newproperty(:is_traffic_group_inherited) do
-    desc "The device group for the specified partition."
-
-    validate do |value|
-      unless value.nil?
-        fail Puppet::Error, "Property 'is_traffic_group_inherited' is read-only, can not set to '#{value}'"
-      end
-    end
-  end
-
 end

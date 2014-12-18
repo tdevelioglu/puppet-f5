@@ -5,9 +5,8 @@ Puppet::Type.type(:f5_pool).provide(:f5_pool, :parent => Puppet::Provider::F5) d
 
   mk_resource_methods
 
-  confine :feature => :posix
-  confine :feature => :ruby_f5_icontrol
-  defaultfor :feature => :posix
+  confine :feature => :ruby_savon
+  defaultfor :feature => :ruby_savon
 
   def initialize(value={})
     super(value)
@@ -22,34 +21,41 @@ Puppet::Type.type(:f5_pool).provide(:f5_pool, :parent => Puppet::Provider::F5) d
     self.class.wsdl
   end
 
+  def self.debug(msg)
+    Puppet.debug("(F5_Pool): #{msg}")
+  end
+
+  def debug(msg)
+    self.class.debug(msg)
+  end
+
   def self.instances
     # Getting all pool info from an F5 is not transactional. But we're safe as
     # long as we are the only one doing writes.
     #
-    Puppet.debug("Puppet::Device::F5: setting active partition to: /")
-    transport['System.Session'].set_active_folder('/')
-    transport['System.Session'].set_recursive_query_state('STATE_ENABLED')
+    debug("Puppet::Device::F5: setting active partition to: /")
+    transport['System.Session'].call(:set_active_folder, message: { folder: '/' })
+    transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
 
-    pools           = transport[wsdl].get_list
-    descriptions    = transport[wsdl].get_description(pools)
-    lb_methods      = transport[wsdl].get_lb_method(pools)
+    pools  = arraywrap(transport[wsdl].get(:get_list))
+    getmsg = { pool_names: { item: pools } }
 
-    # F5 icontrol returns <SOAP::Mapping::Object's instead of
-    # ruby hashes making it difficult to compare with the puppet resource data.
-    #
-    # We iterate through all the SOAP objects and collect everything again.
-    members = []
-    transport[wsdl].get_member_v2(pools).each do |members_list|
-      members_collected = []
-      members_list.each do |member|
-        members_collected << {'address' => member['address'], 'port' => member['port'] }
-      end
-      members << members_collected
+    descriptions = arraywrap(transport[wsdl].get(:get_description, getmsg)).collect do |desc|
+      desc.nil? ? "" : desc
     end
 
-    health_monitorss =
-      transport[wsdl].get_monitor_association(pools).collect do |monitor|
-        monitor['monitor_rule']['monitor_templates']
+    lb_methods = arraywrap(transport[wsdl].get(:get_lb_method, getmsg))
+    members    = arraywrap(transport[wsdl].get(:get_member_v2, getmsg)).collect do |x|
+      x.nil? ? [] : arraywrap(x[:item])
+    end
+
+    health_monitors =
+      arraywrap(transport[wsdl].get(:get_monitor_association, getmsg)).collect do |monitor|
+        if monitor[:monitor_rule][:monitor_templates].nil?
+          []
+        else
+          arraywrap(monitor[:monitor_rule][:monitor_templates][:item])
+        end
       end
 
     instances = []
@@ -60,7 +66,7 @@ Puppet::Type.type(:f5_pool).provide(:f5_pool, :parent => Puppet::Provider::F5) d
         :description     => descriptions[index],
         :lb_method       => lb_methods[index].gsub("LB_METHOD_", ""),
         :members         => members[index],
-        :health_monitors => health_monitorss[index],
+        :health_monitors => health_monitors[index],
       )
     end
 
@@ -109,48 +115,68 @@ Puppet::Type.type(:f5_pool).provide(:f5_pool, :parent => Puppet::Provider::F5) d
 
   def flush
     @partition = File.dirname(resource[:name])
-    transport['System.Session'].set_active_folder(@partition)
+    transport['System.Session'].call(:set_active_folder, message: { folder: @partition })
 
+    pool = { pool_names: { item: resource[:name] } }
     if @property_flush[:ensure] == :destroy
-      transport[wsdl].delete_pool([resource[:name]])
+      transport[wsdl].call(:delete_pool, message: pool)
       return
     end
 
-    transport['System.Session'].start_transaction
-
-    if @property_flush[:ensure] == :create
-        transport[wsdl].create_v2([resource[:name]], ["LB_METHOD_#{@resource[:lb_method]}"], [@resource[:members]])
-    end
-
-    unless @property_flush[:lb_method].nil?
-      transport[wsdl].set_lb_method([resource[:name]], [@property_flush[:lb_method]])
-    end
-
-    unless @property_flush[:members].nil?
-      transport[wsdl].remove_member_v2([resource[:name]], [@property_hash[:members] - @property_flush[:members]])
-
-      transport[wsdl].add_member_v2([resource[:name]], [@property_flush[:members] - @property_hash[:members]])
-    end
-
-    unless @property_flush[:description].nil?
-      transport[wsdl].set_description([resource[:name]], [@property_flush[:description]])
-    end
+    begin
+      transport['System.Session'].call(:start_transaction)
   
-    unless @property_flush[:health_monitors].nil?
-      monitor_assoc = {
-        'monitor_rule' => {
-          'monitor_templates' => @property_flush[:health_monitors],
-          'quorum'            => 0,
-          'type'              => 'MONITOR_RULE_TYPE_AND_LIST'
-        },
-        'pool_name'    => resource[:name]
-      }
-      transport[wsdl].set_monitor_association([monitor_assoc])
+      if @property_flush[:ensure] == :create
+        message = pool.merge(lb_methods: { item: "LB_METHOD_#{@resource[:lb_method]}" }, members: { item: @resource[:members] })
+        transport[wsdl].call(:create_v2, message: message)
+      end
+  
+      unless @property_flush[:lb_method].nil?
+        message = pool.merge(lb_methods: { item: @property_flush[:lb_method] })
+        transport[wsdl].call(:set_lb_method, message: message)
+      end
+  
+      unless @property_flush[:members].nil?
+        members_remove = @property_hash[:members] - @property_flush[:members]
+        members_add    = @property_flush[:members] - @property_hash[:members]
+  
+        if !members_remove.empty?
+          transport[wsdl].call(:remove_member_v2, message: pool.merge(members: { item: { item: members_remove } }))
+        end
+        transport[wsdl].call(:add_member_v2, message: pool.merge(members: { item: { item: members_add } }))
+      end
+  
+      unless @property_flush[:description].nil?
+        message = pool.merge(descriptions: { item: @property_flush[:description] })
+        transport[wsdl].call(:set_description, message: message)
+      end
+    
+      unless @property_flush[:health_monitors].nil?
+        monitor_assoc = {
+          monitor_rule: {
+            monitor_templates: { item: @property_flush[:health_monitors] },
+            quorum: 0,
+            type: 'MONITOR_RULE_TYPE_AND_LIST'
+          },
+          pool_name: resource[:name]
+        }
+        message = { monitor_associations: { item: monitor_assoc } }
+        transport[wsdl].call(:set_monitor_association, message: message)
+      end
+  
+      transport['System.Session'].call(:submit_transaction)
+  
+    rescue Exception => e
+      begin
+        transport['System.Session'].call(:rollback_transaction)
+      rescue Exception => e
+        if !e.message.include?("No transaction is open to roll back")
+          raise
+        end
+      end
+      raise
     end
-
-    transport['System.Session'].submit_transaction
 
     @property_hash = resource.to_hash
   end
-
 end

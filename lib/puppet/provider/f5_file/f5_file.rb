@@ -4,9 +4,8 @@ require 'puppet/provider/f5'
 Puppet::Type.type(:f5_file).provide(:f5_file, :parent => Puppet::Provider::F5) do
   @doc = 'Manages f5 String classes (datagroups)'
 
-  confine :feature => :posix
-  confine :feature => :ruby_f5_icontrol
-  defaultfor :feature => :posix
+  confine :feature => :ruby_savon
+  defaultfor :feature => :ruby_savon
 
   def self.wsdl
     'LocalLB.Class'

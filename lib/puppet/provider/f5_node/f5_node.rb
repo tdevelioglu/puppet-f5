@@ -5,9 +5,8 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
 
   mk_resource_methods
 
-  confine :feature => :posix
-  confine :feature => :ruby_f5_icontrol
-  defaultfor :feature => :posix
+  confine :feature => :ruby_savon
+  defaultfor :feature => :ruby_savon
 
   def initialize(value={})
     super(value)
@@ -20,6 +19,14 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
 
   def wsdl
     self.class.wsdl
+  end
+
+  def self.debug(msg)
+    Puppet.debug("(F5_Node): #{msg}")
+  end
+
+  def debug(msg)
+    self.class.debug(msg)
   end
 
   # The F5 api is confusing when it comes to getting and setting the
@@ -43,45 +50,107 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
   end
 
   def self.monitor_rule_to_property(monitor_rule)
-    if monitor_rule['monitor_templates'] == ["/Common/none"]
-      ['none']
+    if monitor_rule[:monitor_templates].nil?
+      ["default"]
+    elsif monitor_rule[:monitor_templates][:item] == "/Common/none"
+      ["none"]
     else
-      monitor_rule['monitor_templates']
+      Array(monitor_rule[:monitor_templates][:item])
     end
   end
 
-  def self.property_to_monitor_rule(property)
-    quorum = 0 # when is this not 0 ?
-    type =
-      if property == ["none"]
-        "MONITOR_RULE_TYPE_NONE"
-      elsif property.length == 1
-        "MONITOR_RULE_TYPE_SINGLE"
-      else
-        "MONITOR_RULE_TYPE_AND_LIST"
+  def self.prop_to_monrule(property)
+    quorum    = 0 # when is this not 0 ?
+    templates = { item: property }
+
+    if property == ["none"]
+      type      = "MONITOR_RULE_TYPE_NONE"
+      templates = { item: "/Common/none" }
+    elsif property == ["default"]
+      type      = "MONITOR_RULE_TYPE_SINGLE"
+      templates = { item: [''] }
+    elsif property.length == 1
+      type = "MONITOR_RULE_TYPE_SINGLE"
+    else
+      type = "MONITOR_RULE_TYPE_AND_LIST"
+    end
+
+    { monitor_templates: templates, quorum: quorum, type: type }
+  end
+
+  def self.delete_poolmembers(node)
+    partition = transport['System.Session'].get(:get_active_folder)
+    recursive = transport['System.Session'].get(:get_recursive_query_state)
+
+    wsdl = 'LocalLB.Pool'
+
+    if partition != '/'
+      debug("Puppet::Device::F5: setting active partition to: /")
+      transport['System.Session'].call(:set_active_folder, message: { folder: '/' })
+    end
+
+    if recursive != 'STATE_ENABLED'
+      transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
+    end
+
+    all_pools       = arraywrap(transport[wsdl].get(:get_list))
+    all_poolmembers = arraywrap(transport[wsdl].get(:get_member_v2, { pool_names: { item: all_pools } }))
+
+    found_pools   = []
+    found_members = []
+    all_pools.each_with_index do |pool, index|
+      poolmembers = arraywrap(all_poolmembers[index][:item])
+
+      if poolmembers.nil?
+        next
       end
 
-    { "monitor_templates" => property, "quorum" => quorum, "type" => type }
+      found = []
+      poolmembers.each do |member|
+        if member["address"] == node
+          found << member
+        end
+      end
+
+      unless found.empty?
+        found_pools << pool
+        found_members << found
+      end
+      
+    end
+
+    if ! found_pools.empty?
+      transport['System.Session'].call(:set_active_folder, message: { folder: '/Common' })
+      transport[wsdl].call(:remove_member_v2, message: { pool_names: { item: found_pools }, members: { item: found_members } })
+
+      # restore system settings
+      transport['System.Session'].call(:set_active_folder, message: { folder: partition })
+      transport['System.Session'].call(:set_recursive_query_state, message: { state: recursive })
+    end
   end
 
   def self.instances
     # Getting all node info from an F5 is not transactional. But we're safe as
     # long as we are the only one doing writes.
     #
-    Puppet.debug("Puppet::Device::F5: setting active partition to: /")
+    debug("Puppet::Device::F5: setting active partition to: /")
 
-    transport['System.Session'].set_active_folder('/')
-    transport['System.Session'].set_recursive_query_state('STATE_ENABLED')
+    transport['System.Session'].call(:set_active_folder, message: { folder: '/' })
+    transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
 
-    names             = transport[wsdl].get_list
-    connection_limits = transport[wsdl].get_connection_limit(names)
-    descriptions      = transport[wsdl].get_description(names)
-    dynamic_ratios    = transport[wsdl].get_dynamic_ratio_v2(names)
-    health_monitors   = transport[wsdl].get_monitor_rule(names)
-    ipaddresses       = transport[wsdl].get_address(names)
-    rate_limits       = transport[wsdl].get_rate_limit(names)
-    ratios            = transport[wsdl].get_ratio(names)
-    session_status    = transport[wsdl].get_session_status(names)
+    names  = arraywrap(transport[wsdl].get(:get_list))
+    getmsg = { nodes: { item: names } }
+
+    connection_limits = arraywrap(transport[wsdl].get(:get_connection_limit, getmsg))
+    descriptions      = arraywrap(transport[wsdl].get(:get_description, getmsg)).collect do |desc|
+      desc.nil? ? "" : desc
+    end
+    dynamic_ratios    = arraywrap(transport[wsdl].get(:get_dynamic_ratio_v2, getmsg))
+    health_monitors   = arraywrap(transport[wsdl].get(:get_monitor_rule, getmsg))
+    ipaddresses       = arraywrap(transport[wsdl].get(:get_address, getmsg))
+    rate_limits       = arraywrap(transport[wsdl].get(:get_rate_limit, getmsg))
+    ratios            = arraywrap(transport[wsdl].get(:get_ratio, getmsg))
+    session_status    = arraywrap(transport[wsdl].get(:get_session_status, getmsg))
 
     instances = []
     names.each_index do |x|
@@ -161,18 +230,19 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
   def flush
     @partition = File.dirname(resource[:name])
 
-    transport['System.Session'].set_active_folder(@partition)
+    transport['System.Session'].call(:set_active_folder, message: { folder: @partition })
+    node = { nodes: { item: resource[:name] } }
 
     if @property_flush[:ensure] == :destroy
       begin
-        transport['System.Session'].start_transaction
+        transport['System.Session'].call(:start_transaction)
 
         self.class.delete_poolmembers(resource[:name])
-        transport[wsdl].delete_node_address([resource[:name]])
+        transport[wsdl].call(:delete_node_address, message: node)
 
-        transport['System.Session'].submit_transaction
+        transport['System.Session'].call(:submit_transaction)
       rescue Exception => e
-        transport['System.Session'].rollback_transaction
+        transport['System.Session'].call(:rollback_transaction)
         raise e
       end
 
@@ -180,10 +250,12 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
     end
 
     begin
-      transport['System.Session'].start_transaction
+      transport['System.Session'].call(:start_transaction)
 
       if @property_flush[:ensure] == :create
-        transport[wsdl].create([resource[:name]], [resource[:ipaddress]], [resource[:connection_limit]])
+        message = node.merge(addresses: { item: resource[:ipaddress] },
+          limits: { item: resource[:connection_limit] })
+        transport[wsdl].call(:create, message: message)
       end
   
       unless @property_flush[:ipaddress].nil?
@@ -193,26 +265,24 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
           # LocalLB.NodeAddressV2 doesn't support updating ipaddress, so we
           # delete-create the node.
           # This can potentially leave you with a deleted node!
-          transport[wsdl].delete_node_address([resource[:name]])
-          transport['System.Session'].submit_transaction
+          transport[wsdl].call(:delete_node_address, message: node)
+          transport['System.Session'].call(:submit_transaction)
   
-          transport['System.Session'].start_transaction
+          transport['System.Session'].call(:start_transaction)
           transport[wsdl].create([resource[:name]], [@property_flush[:ipaddress]],
             [@property_hash[:connection_limit]])
   
           # Restore node state
-          transport[wsdl].set_connection_limit([resource[:name]], [@property_hash[:connection_limit]])
-          transport[wsdl].set_description([resource[:name]], [@property_hash[:description]])
-          transport[wsdl].set_dynamic_ratio_v2([resource[:name]], [@property_hash[:dynamic_ratio]])
-          transport[wsdl].set_monitor_rule([resource[:name]],
-            [self.class.property_to_monitor_rule(@property_hash[:health_monitors])])
-          transport[wsdl].set_rate_limit([resource[:name]], [@property_hash[:rate_limit]])
-          transport[wsdl].set_ratio([resource[:name]], [@property_hash[:ratio]])
-          transport[wsdl].set_session_enabled_state([resource[:name]],
-            [self.class.property_to_session_enabled_state(@property_hash[:session_status])])
+          transport[wsdl].call(:set_connection_limit, message: node.merge(limits: { item: @property_hash[:connection_limit] }))
+          transport[wsdl].call(:set_description, message: node.merge( descriptions: { item: @property_hash[:description] }))
+          transport[wsdl].call(:set_dynamic_ratio_v2, message: node.merge( dynamic_ratios: { item: @property_hash[:dynamic_ratio] }))
+          transport[wsdl].call(:set_monitor_rule,message: node.merge(monitor_rules: { item: self.class.prop_to_monrule(@property_hash[:health_monitors]) }))
+          transport[wsdl].call(:set_rate_limit, message: node.merge( limits: { item: @property_hash[:rate_limit] }))
+          transport[wsdl].call(:set_ratio, message: node.merge(ratios: { item: @property_hash[:ratio] }))
+          transport[wsdl].call(:set_session_enabled_state, message: node.merge(states: { item: self.class.property_to_session_enabled_state(@property_hash[:session_status]) }))
 
-          transport['System.Session'].submit_transaction
-          transport['System.Session'].start_transaction
+          transport['System.Session'].call(:submit_transaction)
+          transport['System.Session'].call(:start_transaction)
         else
           Puppet.notice("Parameter ipaddress has changed but force is " +
             "#{resource[:force]}, not updating ipaddress.)")
@@ -220,92 +290,52 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
       end
 
       unless @property_flush[:connection_limit].nil?
-        transport[wsdl].set_connection_limit([resource[:name]], [@property_flush[:connection_limit]])
+        message = node.merge(limits: { item: @property_flush[:connection_limit] })
+        transport[wsdl].call(:set_connection_limit, message: message)
       end
   
       unless @property_flush[:description].nil?
-        transport[wsdl].set_description([resource[:name]], [@property_flush[:description]])
+        message = node.merge(descriptions: { item: @property_flush[:description] })
+        transport[wsdl].call(:set_description, message: message)
       end
     
       unless @property_flush[:dynamic_ratio].nil?
-        transport[wsdl].set_dynamic_ratio_v2([resource[:name]], [@property_flush[:dynamic_ratio]])
+        message = node.merge(dynamic_ratios: { item: @property_flush[:dynamic_ratio] })
+        transport[wsdl].call(:set_dynamic_ratio_v2, message: message)
       end
     
       unless @property_flush[:health_monitors].nil?
-        transport[wsdl].set_monitor_rule([resource[:name]],
-          [self.class.property_to_monitor_rule(@property_flush[:health_monitors])])
+        message = node.merge( monitor_rules: { item: self.class.prop_to_monrule(@property_flush[:health_monitors]) })
+        transport[wsdl].call(:set_monitor_rule, message: message)
       end
   
       unless @property_flush[:rate_limit].nil?
-        transport[wsdl].set_rate_limit([resource[:name]], [@property_flush[:rate_limit]])
+        message = node.merge(limits: { item: @property_flush[:rate_limit] })
+        transport[wsdl].call(:set_rate_limit, message: message)
       end
     
       unless @property_flush[:ratio].nil?
-        transport[wsdl].set_ratio([resource[:name]], [@property_flush[:ratio]])
+        message = node.merge(ratios: { item: @property_flush[:ratio] })
+        transport[wsdl].call(:set_ratio, message: message)
       end
     
       unless @property_flush[:session_status].nil?
-        transport[wsdl].set_session_enabled_state([resource[:name]],
-          [self.class.property_to_session_enabled_state(@property_flush[:session_status])])
+        message = node.merge(states: { item: self.class.property_to_session_enabled_state(@property_flush[:session_status]) })
+        transport[wsdl].call(:set_session_enabled_state, message: message)
       end
   
-      transport['System.Session'].submit_transaction
+      transport['System.Session'].call(:submit_transaction)
     rescue Exception => e
-      transport['System.Session'].rollback_transaction
-      raise e
+      begin
+        transport['System.Session'].call(:rollback_transaction)
+      rescue Exception => e
+        if !e.message.include?("No transaction is open to roll back")
+          raise
+        end
+      end
+      raise
     end
 
     @property_hash = resource.to_hash
   end
-
-  def self.delete_poolmembers(node)
-    partition = transport['System.Session'].get_active_folder()
-    recursive = transport['System.Session'].get_recursive_query_state()
-
-    wsdl = 'LocalLB.Pool'
-
-    if partition != '/'
-      Puppet.debug("Puppet::Device::F5: setting active partition to: /")
-      transport['System.Session'].set_active_folder('/')
-    end
-
-    if recursive != 'STATE_ENABLED'
-      transport['System.Session'].set_recursive_query_state('STATE_ENABLED')
-    end
-
-    all_pools       = transport[wsdl].get_list()
-    all_poolmembers = transport[wsdl].get_member_v2(all_pools)
-
-    found_pools   = []
-    found_members = []
-
-    all_pools.each_with_index do |pool, index|
-      poolmembers = all_poolmembers[index]
-
-      if poolmembers.empty?
-        next
-      end
-
-      found = []
-      poolmembers.each do |member|
-        if member["address"] == node
-          found << member
-        end
-      end
-
-      unless found.empty?
-        found_pools << pool
-        found_members << found
-      end
-      
-    end
-
-    transport['System.Session'].set_active_folder('/Common')
-    transport[wsdl].remove_member_v2(found_pools, found_members)
-
-    # restore system settings
-    transport['System.Session'].set_active_folder(partition)
-    transport['System.Session'].set_recursive_query_state(recursive)
-  end
-
 end

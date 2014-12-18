@@ -2,7 +2,6 @@ require 'puppet/util/network_device/f5/device'
 require 'base64'
 
 class Puppet::Provider::F5 < Puppet::Provider
-
   attr_accessor :device
 
   # convert 64bit Integer to F5 representation as {:high => 32bit, :low => 32bit}
@@ -14,7 +13,7 @@ class Puppet::Provider::F5 < Puppet::Provider
 
   # convert F5 representation of 64 bit to string (since Puppet compares string rather than int)
   def to_64s(value)
-    ((value.high.to_i << 32) + value.low.to_i).to_s
+    ((value[:high].to_i << 32) + value[:low].to_i).to_s
   end
 
   def network_address(value)
@@ -94,4 +93,15 @@ class Puppet::Provider::F5 < Puppet::Provider
       content = content[chunk_size..content.size]
     end
   end
+  
+  # Often we can't predict what a response will be (single value or list) so
+  # we wrap it in a list, if it's not, to make life simpler.
+  def self.arraywrap(arg)
+    if !arg.is_a?(Array)
+      [arg]
+    else
+      arg
+    end
+  end
+
 end

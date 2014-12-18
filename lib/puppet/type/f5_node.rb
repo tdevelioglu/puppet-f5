@@ -84,12 +84,10 @@ Puppet::Type.newtype(:f5_node) do
     end
 
     validate do |value|
-      unless Puppet::Util.absolute_path?(value)
+      unless Puppet::Util.absolute_path?(value) || value == "none" || value == "default"
         fail Puppet::Error, "Health monitors must be fully qualified (e.g. '/Common/http'), not '#{value}'"
       end
     end
-
-    defaultto []
   end
 
   newproperty(:rate_limit) do
