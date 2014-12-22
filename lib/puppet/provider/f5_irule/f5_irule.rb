@@ -24,11 +24,7 @@ Puppet::Type.type(:f5_irule).provide(:f5_irule, :parent => Puppet::Provider::F5)
   def self.instances
     instances = []
 
-    # Getting all poolmember info from an F5 is not transactional. But we're safe as
-    # long as we are the only one doing writes.
-    #
-    Puppet.debug("Puppet::Device::F5: setting active partition to: /")
-    transport['System.Session'].call(:set_active_folder, message: { folder: '/' })
+    set_activefolder('/')
     transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
 
     rule_names = arraywrap(transport[wsdl].get(:get_list))
@@ -99,8 +95,7 @@ Puppet::Type.type(:f5_irule).provide(:f5_irule, :parent => Puppet::Provider::F5)
       }
     }
 
-    Puppet.debug("Puppet::Device::F5: setting active partition to: #{partition}")
-    transport['System.Session'].call(:set_active_folder, message: { folder: partition })
+    set_activefolder(partition)
 
     if @property_flush[:ensure] == :destroy
       transport[wsdl].call(:delete_rule, message: rule)

@@ -104,4 +104,27 @@ class Puppet::Provider::F5 < Puppet::Provider
     end
   end
 
+  def self.debug(msg)
+    Puppet.debug("(#{self.name}): #{msg}")
+  end
+
+  def debug(msg)
+    self.class.debug(msg)
+  end
+
+  def self.set_activefolder(folder)
+    # If @device is nil, we're probably being called at the first prefetch.
+    transport if @device.nil?
+    debug("Active folder: #{@device.active_folder}")
+    debug("New folder: #{folder}")
+    if @device.active_folder != folder
+      debug("Changing active folder to '#{folder}'")
+      transport['System.Session'].call(:set_active_folder, message: { folder: folder })
+      @device.active_folder = folder
+    end
+  end
+
+  def set_activefolder(folder)
+    self.class.set_activefolder(folder)
+  end
 end

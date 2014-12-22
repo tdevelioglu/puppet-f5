@@ -21,14 +21,6 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
     self.class.wsdl
   end
 
-  def self.debug(msg)
-    Puppet.debug("(F5_Node): #{msg}")
-  end
-
-  def debug(msg)
-    self.class.debug(msg)
-  end
-
   # The F5 api is confusing when it comes to getting and setting the
   # session_enabled_state, session_status or whatever it's now called. 
   #
@@ -79,19 +71,10 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
   end
 
   def self.delete_poolmembers(node)
-    partition = transport['System.Session'].get(:get_active_folder)
-    recursive = transport['System.Session'].get(:get_recursive_query_state)
-
     wsdl = 'LocalLB.Pool'
 
-    if partition != '/'
-      debug("Puppet::Device::F5: setting active partition to: /")
-      transport['System.Session'].call(:set_active_folder, message: { folder: '/' })
-    end
-
-    if recursive != 'STATE_ENABLED'
-      transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
-    end
+    set_activefolder('/')
+    transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
 
     all_pools       = arraywrap(transport[wsdl].get(:get_list))
     all_poolmembers = arraywrap(transport[wsdl].get(:get_member_v2, { pool_names: { item: all_pools } }))
@@ -120,11 +103,11 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
     end
 
     if ! found_pools.empty?
-      transport['System.Session'].call(:set_active_folder, message: { folder: '/Common' })
+      set_activefolder('/Common')
       transport[wsdl].call(:remove_member_v2, message: { pool_names: { item: found_pools }, members: { item: found_members } })
 
       # restore system settings
-      transport['System.Session'].call(:set_active_folder, message: { folder: partition })
+      set_activefolder(partition)
       transport['System.Session'].call(:set_recursive_query_state, message: { state: recursive })
     end
   end
@@ -133,9 +116,7 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
     # Getting all node info from an F5 is not transactional. But we're safe as
     # long as we are the only one doing writes.
     #
-    debug("Puppet::Device::F5: setting active partition to: /")
-
-    transport['System.Session'].call(:set_active_folder, message: { folder: '/' })
+    set_activefolder('/')
     transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
 
     names  = arraywrap(transport[wsdl].get(:get_list))
@@ -230,7 +211,7 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
   def flush
     @partition = File.dirname(resource[:name])
 
-    transport['System.Session'].call(:set_active_folder, message: { folder: @partition })
+    set_activefolder(@partition)
     node = { nodes: { item: resource[:name] } }
 
     if @property_flush[:ensure] == :destroy

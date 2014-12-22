@@ -21,21 +21,12 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
     self.class.wsdl
   end
 
-  def self.debug(msg)
-    Puppet.debug("(F5_Poolmember): #{msg}")
-  end
-
-  def debug(msg)
-    self.class.debug(msg)
-  end
-
   def self.instances
     instances = []
     # Getting all poolmember info from an F5 is not transactional. But we're safe as
     # long as we are the only one doing writes.
     #
-    debug("Puppet::Device::F5: setting active partition to: /")
-    transport['System.Session'].call(:set_active_folder, message: { folder: '/' })
+    set_activefolder('/')
     transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
 
     pools   = transport[wsdl].get(:get_list)
@@ -75,7 +66,6 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
       if provider = f5_poolmembers.find do |poolmember|
         "#{poolmember.pool}:#{poolmember.name}:#{poolmember.port}" == resource.title
       end
-        debug("Prefetched: #{resources[name]}")
         resources[name].provider = provider
       end
     end
@@ -123,8 +113,7 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
     addressport = { address: resource[:name], port: resource[:port] }
     poolmember  = { pool_names: { item: resource[:pool] }, members: { item: { item: addressport } } }
 
-    debug("Puppet::Device::F5: setting active partition to: #{partition}")
-    transport['System.Session'].call(:set_active_folder, message: { folder: partition })
+    set_activefolder(partition)
 
     if @property_flush[:ensure] == :destroy
       transport[wsdl].call(:remove_member_v2, message: poolmember)

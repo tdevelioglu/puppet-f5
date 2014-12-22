@@ -66,6 +66,11 @@ class Puppet::Util::NetworkDevice::F5::Facts
       @facts["disk_free_#{disk[:partition_name].gsub('/', '')}"] = "#{(to_64i(disk[:free_blocks]) * to_64i(disk[:block_size]))/1024/1024} MB"
     end
 
+    # Failover state.
+    @facts["failover_state"] =
+      @transport['System.Failover'].get(:get_failover_state)
+    @facts["failover_state"].downcase!.slice!("failover_state_")
+
     # cleanup of f5 output to match existing facter key values.
     map = { 'host_name'        => 'fqdn',
             'base_mac_address' => 'macaddress',

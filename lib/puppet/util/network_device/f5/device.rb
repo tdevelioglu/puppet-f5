@@ -4,7 +4,7 @@ require 'puppet/util/network_device/f5/transport'
 
 class Puppet::Util::NetworkDevice::F5::Device
 
-  attr_accessor :url, :transport, :partition
+  attr_accessor :url, :transport, :active_folder
 
   def initialize(url, option = {})
     @url = URI.parse(url)
@@ -30,6 +30,7 @@ class Puppet::Util::NetworkDevice::F5::Device
       'Management.UserManagement',
       'Networking.RouteTableV2',
       'System.ConfigSync',
+      'System.Failover',
       'System.Inet',
       'System.Session',
       'System.SystemInfo'
@@ -43,12 +44,14 @@ class Puppet::Util::NetworkDevice::F5::Device
 
     Puppet.debug("Puppet::Device::F5: setting active partition to /.")
     transport['System.Session'].call(:set_active_folder, message: { folder: '/' })
+    @active_folder = '/'
 
   end
 
   def facts
     @facts ||= Puppet::Util::NetworkDevice::F5::Facts.new(@transport)
     facts = @facts.retrieve
+    Puppet.debug("Facts retrieved: #{facts}")
     facts
   end
 end

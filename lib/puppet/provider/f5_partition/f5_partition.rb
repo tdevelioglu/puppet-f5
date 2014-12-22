@@ -21,17 +21,9 @@ Puppet::Type.type(:f5_partition).provide(:f5_partition, :parent => Puppet::Provi
     self.class.wsdl
   end
 
-  def self.debug(msg)
-    Puppet.debug("(F5_Partition): #{msg}")
-  end
-
-  def debug(msg)
-    self.class.debug(msg)
-  end
 
   def self.instances
-    debug("Puppet::Device::F5: setting active partition to: /")
-    transport['System.Session'].call(:set_active_folder, message: { folder: '/' })
+    set_activefolder('/')
     transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
 
     partitions = arraywrap(transport[wsdl].get(:get_list))
@@ -95,7 +87,7 @@ Puppet::Type.type(:f5_partition).provide(:f5_partition, :parent => Puppet::Provi
   end
 
   def flush
-    transport['System.Session'].call(:set_active_folder, message: { folder: '/' })
+    set_activefolder('/Common')
     folder = { folders: { item: resource[:name] } }
 
     if @property_flush[:ensure] == :destroy

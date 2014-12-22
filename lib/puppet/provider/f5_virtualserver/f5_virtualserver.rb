@@ -21,22 +21,13 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     self.class.wsdl
   end
 
-  def self.debug(msg)
-    Puppet.debug("(F5_Node): #{msg}")
-  end
-
-  def debug(msg)
-    self.class.debug(msg)
-  end
-
   def self.instances
     instances = []
 
     # Getting all info from an F5 is not transactional. But we're safe as
     # long as we are the only one doing writes.
     #
-    debug("Puppet::Device::F5: setting active partition to: /")
-    transport['System.Session'].call(:set_active_folder, message: { folder: '/' })
+    set_activefolder('/')
     transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
 
     names = arraywrap(transport[wsdl].get(:get_list))
@@ -191,9 +182,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
 
   def flush
     partition = File.dirname(resource[:name])
-
-    debug("Puppet::Device::F5: setting active partition to: #{partition}")
-    transport['System.Session'].call(:set_active_folder, message: { folder: partition })
+    set_activefolder(partition)
 
     vs = { virtual_servers: { item: resource[:name] } }
     if @property_flush[:ensure] == :destroy
