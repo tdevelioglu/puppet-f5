@@ -55,8 +55,6 @@ Puppet::Type.newtype(:f5_pool) do
         not '#{value}"
       end
     end
-
-    defaultto 'ROUND_ROBIN'
   end
 
   newproperty(:members, :array_matching => :all) do
@@ -108,7 +106,6 @@ Puppet::Type.newtype(:f5_pool) do
       { address: value["address"], port: value["port"] }
     end
 
-    defaultto []
   end
 
   newproperty(:health_monitors, :array_matching => :all) do
@@ -132,8 +129,10 @@ Puppet::Type.newtype(:f5_pool) do
   end  
 
   autorequire(:f5_node) do
-    self[:members].collect do |member|
-      member['address']
+    if !self[:members].nil?
+      self[:members].collect do |member|
+        member['address']
+      end
     end
   end
 

@@ -82,6 +82,10 @@ Puppet::Type.type(:f5_pool).provide(:f5_pool, :parent => Puppet::Provider::F5) d
     @property_flush[:ensure]          = :create
     @property_flush[:description]     = resource[:description]
     @property_flush[:health_monitors] = resource[:health_monitors]
+    @property_flush[:lb_method]       = resource[:health_monitors].nil? ?
+      'ROUND_ROBIN' : resource[:health_monitors]
+    @property_flush[:members]         = resource[:members].nil? ?
+      [] : resource[:members]
   end
 
   def destroy
@@ -118,7 +122,8 @@ Puppet::Type.type(:f5_pool).provide(:f5_pool, :parent => Puppet::Provider::F5) d
       transport['System.Session'].call(:start_transaction)
   
       if @property_flush[:ensure] == :create
-        message = pool.merge(lb_methods: { item: "LB_METHOD_#{@resource[:lb_method]}" }, members: { item: @resource[:members] })
+        message = pool.merge(lb_methods: { item: "LB_METHOD_#{@property_flush[:lb_method]}" },
+                             members: { item: @property_flush[:members] })
         transport[wsdl].call(:create_v2, message: message)
       end
   
