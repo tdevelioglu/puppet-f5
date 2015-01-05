@@ -125,10 +125,14 @@ Puppet::Type.type(:f5_pool).provide(:f5_pool, :parent => Puppet::Provider::F5) d
         message = pool.merge(lb_methods: { item: "LB_METHOD_#{@property_flush[:lb_method]}" },
                              members: { item: @property_flush[:members] })
         transport[wsdl].call(:create_v2, message: message)
+
+        # Prevent further API calls.
+        @property_flush.delete(:lb_method)
+        @property_flush.delete(:members)
       end
   
       unless @property_flush[:lb_method].nil?
-        message = pool.merge(lb_methods: { item: @property_flush[:lb_method] })
+        message = pool.merge(lb_methods: { item: "LB_METHOD_#{@property_flush[:lb_method]}" })
         transport[wsdl].call(:set_lb_method, message: message)
       end
   
