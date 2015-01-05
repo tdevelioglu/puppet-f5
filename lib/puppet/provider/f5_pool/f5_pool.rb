@@ -83,7 +83,7 @@ Puppet::Type.type(:f5_pool).provide(:f5_pool, :parent => Puppet::Provider::F5) d
     @property_flush[:description]     = resource[:description]
     @property_flush[:health_monitors] = resource[:health_monitors]
     @property_flush[:lb_method]       = resource[:lb_method].nil? ?
-      'ROUND_ROBIN' : resource[:health_monitors]
+      'ROUND_ROBIN' : resource[:lb_method]
     @property_flush[:members]         = resource[:members].nil? ?
       [] : resource[:members]
   end
