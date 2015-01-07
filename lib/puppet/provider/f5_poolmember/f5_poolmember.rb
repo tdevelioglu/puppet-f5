@@ -60,13 +60,13 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
   end
 
   def self.prefetch(resources)
-    f5_poolmembers = instances
+    instances = instances()
 
     resources.each do |name, resource|
-      if provider = f5_poolmembers.find do |poolmember|
-        "#{poolmember.pool}:#{poolmember.name}:#{poolmember.port}" == resource.title
+      if provider = instances.find do |prov|
+        "#{prov.pool}:#{prov.name}:#{prov.port}" == resource.title
       end
-        resources[name].provider = provider
+        resource.provider = provider
       end
     end
   end
@@ -109,11 +109,10 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
   end
 
   def flush
-    partition   = File.dirname(resource[:name])
-    addressport = { address: resource[:name], port: resource[:port] }
+    addressport = { address: resource[:node], port: resource[:port] }
     poolmember  = { pool_names: { item: resource[:pool] }, members: { item: { item: addressport } } }
 
-    set_activefolder(partition)
+    set_activefolder('/Common')
 
     if @property_flush[:ensure] == :destroy
       transport[wsdl].call(:remove_member_v2, message: poolmember)

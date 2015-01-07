@@ -10,33 +10,37 @@ Puppet::Type.newtype(:f5_poolmember) do
 
   def initialize(resource)
     super
-    self.title = "#{resource[:pool]}:#{resource[:name]}:#{resource[:port]}"
+    self.title = "#{resource[:pool]}:#{resource[:node]}:#{resource[:port]}"
   end
 
   def self.title_patterns
     [
-      [ /^([^:]+):([^:]+):([0-9]+)$/m,
+      [ /^(([^:]+):([^:]+):([0-9]+))$/m,
         [
-          [:pool, lambda{|x| x}],
           [:name, lambda{|x| x}],
+          [:pool, lambda{|x| x}],
+          [:node, lambda{|x| x}],
           [:port, lambda{|x| x}]
         ]
       ],
-      [ /^([^:]+):([0-9]+)$/m,
+      [ /^(([^:]+):([0-9]+))$/m,
         [
           [:name, lambda{|x| x }],
+          [:node, lambda{|x| x}],
           [:port, lambda{|x| x }]
         ]
       ],
-      [ /^([^:]+):([^:]+)$/m,
+      [ /^(([^:]+):([^:]+))$/m,
         [
+          [:name, lambda{|x| x }],
           [:pool, lambda{|x| x }],
-          [:name, lambda{|x| x }]
+          [:node, lambda{|x| x }],
         ]
       ],
-      [ /(.*)/m,
+      [ /((.*))/m,
         [
-          [:name, lambda{|x| x }]
+          [:name, lambda{|x| x }],
+          [:node, lambda{|x| x }]
         ]
       ]
     ]
@@ -48,6 +52,16 @@ Puppet::Type.newtype(:f5_poolmember) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Poolmember names must be fully qualified, not '#{value}'"
+      end
+    end
+  end
+
+  newparam(:node, :namevar=>true) do
+    desc "The node. In v11+ this is the node name"
+
+    validate do |value|
+      unless Puppet::Util.absolute_path?(value)
+        fail Puppet::Error, "Poolmember node name must be fully qualified, not '#{value}'"
       end
     end
   end
