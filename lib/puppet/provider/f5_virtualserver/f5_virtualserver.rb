@@ -204,7 +204,10 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
           type: "RESOURCE_TYPE_#{resource[:type]}",
           default_pool_name: resource[:default_pool]
         }
-        vs_profiles = resource[:profiles].map{ |profile| { profile_name: profile, profile_context: nil } }
+        vs_profiles = resource[:profiles].nil? ? [] :
+          resource[:profiles].map do |profile| {
+            profile_name: profile, profile_context: nil }
+          end
 
         message = {
           definitions: { item: vs_definition },
