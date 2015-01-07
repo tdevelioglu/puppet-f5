@@ -35,16 +35,13 @@ Puppet::Type.newtype(:f5_virtualserver) do
   newproperty(:port) do
     desc "The virtualserver port"
 
-    validate do |value|
-      unless /^\d+$/.match(value)
+    munge do |value|
+      begin
+        Integer(value)
+      rescue
         fail Puppet::Error, "Parameter 'port' must be a number, not '#{value}'"
       end
     end
-
-    munge do |value|
-      Integer(value)
-    end
-
   end
 
   newproperty(:fallback_persistence_profile) do
