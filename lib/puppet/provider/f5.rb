@@ -2,7 +2,13 @@ require 'puppet/util/network_device/f5/device'
 require 'base64'
 
 class Puppet::Provider::F5 < Puppet::Provider
-  attr_accessor :device
+  attr_writer :device
+
+  def self.device
+    # If @device is nil, we're probably being called at the first prefetch.
+    transport if @device.nil?
+    @device
+  end
 
   # convert 64bit Integer to F5 representation as {:high => 32bit, :low => 32bit}
   def to_32h(value)
@@ -113,18 +119,26 @@ class Puppet::Provider::F5 < Puppet::Provider
   end
 
   def self.set_activefolder(folder)
-    # If @device is nil, we're probably being called at the first prefetch.
-    transport if @device.nil?
-    debug("Active folder: #{@device.active_folder}")
-    debug("New folder: #{folder}")
-    if @device.active_folder != folder
-      debug("Changing active folder to '#{folder}'")
-      transport['System.Session'].call(:set_active_folder, message: { folder: folder })
-      @device.active_folder = folder
-    end
+    self.device.active_folder = folder
   end
 
   def set_activefolder(folder)
     self.class.set_activefolder(folder)
+  end
+
+  def self.enable_recursive_query
+    self.device.recursive_query_state = true
+  end
+
+  def start_transaction
+    transport['System.Session'].call(:start_transaction)
+  end
+
+  def submit_transaction
+    transport['System.Session'].call(:submit_transaction)
+  end
+
+  def rollback_transaction
+    transport['System.Session'].call(:rollback_transaction)
   end
 end

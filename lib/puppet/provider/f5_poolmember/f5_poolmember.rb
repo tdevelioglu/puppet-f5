@@ -21,16 +21,19 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
     self.class.wsdl
   end
 
+  def self.get
+  end
+
   def self.instances
     instances = []
     # Getting all poolmember info from an F5 is not transactional. But we're safe as
     # long as we are the only one doing writes.
     #
     set_activefolder('/')
-    transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
+    enable_recursive_query
 
-    pools   = transport[wsdl].get(:get_list)
-    members = transport[wsdl].get(:get_member_v2, { pool_names: { item: pools } })
+    pools   = arraywrap(transport[wsdl].get(:get_list))
+    members = arraywrap(transport[wsdl].get(:get_member_v2, { pool_names: { item: pools } }))
     getmsg  = { pool_names: { item: pools }, members: { item: members } }
 
     connection_limits = arraywrap(transport[wsdl].get(:get_member_connection_limit, getmsg))
@@ -71,23 +74,29 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
     end
   end
 
+  ###########################################################################
+  # Exists/Create/Destroy
+  ###########################################################################
   def exists?
     @property_hash[:ensure] == :present
   end
 
   def create
-    @property_flush[:ensure]           = :create
-    @property_flush[:connection_limit] = resource[:connection_limit]
-    @property_flush[:description]      = resource[:description]
-    @property_flush[:priority_group]   = resource[:priority_group]
-    @property_flush[:rate_limit]       = resource[:rate_limit]
-    @property_flush[:ratio]            = resource[:ratio]
+    @property_flush[:ensure] = :create
+
+    [:connection_limit, :description, :priority_group, :rate_limit,
+     :ratio].each do |x|
+      @property_flush[x] = resource["atcreate_#{x}".to_sym] || resource[x]
+    end
   end
 
   def destroy
     @property_flush[:ensure] = :destroy
   end
 
+  ###########################################################################
+  # Setters
+  ###########################################################################
   def connection_limit=(value)
     @property_flush[:connection_limit] = value
   end
@@ -108,61 +117,62 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
     @property_flush[:ratio] = value
   end
 
+  ###########################################################################
+  # Flush
+  ###########################################################################
   def flush
     addressport = { address: resource[:node], port: resource[:port] }
-    poolmember  = { pool_names: { item: resource[:pool] }, members: { item: { item: addressport } } }
-
+    @poolmember = {
+      pool_names: { item: resource[:pool] },
+      members:    { item: { item: addressport } }
+    }
     set_activefolder('/Common')
 
     if @property_flush[:ensure] == :destroy
-      transport[wsdl].call(:remove_member_v2, message: poolmember)
+      soapcall(:remove_member_v2)
       return
     end
 
     begin
-      transport['System.Session'].call(:start_transaction)
-
+      start_transaction
       if @property_flush[:ensure] == :create
-        transport[wsdl].call(:add_member_v2, message: poolmember)
+        soapcall(:add_member_v2)
       end
-
-      unless @property_flush[:connection_limit].nil?
-        message = poolmember.merge(limits: { item: { item: @property_flush[:connection_limit] } })
-        transport[wsdl].call(:set_member_connection_limit, message: message)
+      if !@property_flush[:connection_limit].nil?
+        soapcall(:set_member_connection_limit, :limits, @property_flush[:connection_limit])
       end
-  
-      unless @property_flush[:description].nil?
-        message = poolmember.merge(descriptions: { item: { item: @property_flush[:description] } })
-        transport[wsdl].call(:set_member_description, message: message)
+      if !@property_flush[:description].nil?
+        soapcall(:set_member_description, :descriptions, @property_flush[:description])
       end
-
-      unless @property_flush[:priority_group].nil?
-        message = poolmember.merge(priorities: { item: { item:  @property_flush[:priority_group] } })
-        transport[wsdl].call(:set_member_priority, message: message)
+      if !@property_flush[:priority_group].nil?
+        soapcall(:set_member_priority, :priorities, @property_flush[:priority_group])
       end
-
-      unless @property_flush[:rate_limit].nil?
-        message = poolmember.merge(limits: { item: { item: @property_flush[:rate_limit] } })
-        transport[wsdl].call(:set_member_rate_limit, message: message)
+      if !@property_flush[:rate_limit].nil?
+        soapcall(:set_member_rate_limit, :limits, @property_flush[:rate_limit])
       end
-  
-      unless @property_flush[:ratio].nil?
-        message = poolmember.merge(ratios: { item: { item: @property_flush[:ratio] } })
-        transport[wsdl].call(:set_member_ratio, message: message)
+      if !@property_flush[:ratio].nil?
+        soapcall(:set_member_ratio, :ratios, @property_flush[:ratio])
       end
-
-      transport['System.Session'].call(:submit_transaction)
+      submit_transaction
     rescue Exception => e
       begin
-        transport['System.Session'].call(:rollback_transaction)
+        rollback_transaction
       rescue Exception => e
         if !e.message.include?("No transaction is open to roll back")
           raise
         end
       end
-      raise
     end
-
     @property_hash = resource.to_hash
   end
+
+  ###########################################################################
+  # Soap caller
+  ###########################################################################
+  def soapcall(method, key=nil, value=nil)
+    message = key.nil? ?
+      @poolmember : @poolmember.merge(key => { item: { item: value } })
+    transport[wsdl].call(method, message: message)
+  end
+
 end

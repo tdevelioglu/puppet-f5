@@ -77,110 +77,130 @@ Puppet::Type.newtype(:f5_poolmember) do
   end
 
   newparam(:port, :namevar => true) do
-    desc "The portnumber"
-
-    validate do |value|
-      unless /^\d+$/.match(value)
-        fail Puppet::Error, "port must be a number, not #{value}"
-      end
-    end
+    desc "The port of the poolmember"
 
     munge do |value|
-      Integer(value)
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'port' must be a number, not '#{value}'"
+      end
     end
   end
 
   newproperty(:connection_limit) do
-    desc "The connection limit for the specified poolmember."
-
-    validate do |value|
-      unless /^\d+$/.match(value)
-        fail Puppet::Error, "connection_limit must be a number, not #{value}"
-      end
-    end
+    desc "The connection limit of the poolmember."
 
     munge do |value|
-      Integer(value)
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'connection_limit' must be a number, not '#{value}'"
+      end
     end
-
-    defaultto "0"
   end
 
   newproperty(:description) do
-    desc "The description for the specified poolmember."
+    desc "The description of the poolmember."
   end
 
-  #
-  # LocalLB.Pool.get_member_monitor_rule is broken
-  #
-#  newproperty(:health_monitors, :array_matching => :all) do
-#    desc "The health monitors for the specified node.
-#    Specify the special value 'none' to disable
-#    all monitors.
-#    e.g.: ['/Common/icmp'. '/Common/http']"
-#
-#    # Override the default method because it assumes there is nothing to do if @should is empty
-#    def insync?(is)
-#      is.sort == @should.sort
-#    end
-#
-#    validate do |value|
-#      unless Puppet::Util.absolute_path?(value)
-#        fail Puppet::Error, "Health monitors must be fully qualified (e.g. '/Common/http'), not '#{value}'"
-#      end
-#    end
-#
-#    defaultto []
-#  end
-
   newproperty(:priority_group) do
-    desc "The priority group for the specified node."
-
-    validate do |value|
-      unless /^\d+$/.match(value)
-        fail Puppet::Error, "priority_group must be a number, not #{value}"
-      end
-    end
+    desc "The priority group of the poolmember."
 
     munge do |value|
-      Integer(value)
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'priority_group' must be a number, not '#{value}'"
+      end
     end
-
-    defaultto "0"
   end
 
   newproperty(:rate_limit) do
-    desc "The rate_limit for the specified node."
-
-    validate do |value|
-      unless /^\d+$/.match(value)
-        fail Puppet::Error, "rate_limit must be a number, not #{value}"
-      end
-    end
+    desc "The rate limit of the poolmember."
 
     munge do |value|
-      Integer(value)
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'rate_limit' must be a number, not '#{value}'"
+      end
     end
-
-    defaultto "0"
   end
 
   newproperty(:ratio) do
-    desc "The ratios for the specified node."
-
-    validate do |value|
-      unless /^\d+$/.match(value)
-        fail Puppet::Error, "ratio must be a number, not #{value}"
-      end
-    end
+    desc "The ratio of the poolmember."
 
     munge do |value|
-      Integer(value)
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'port' must be a number, not '#{value}'"
+      end
     end
-
-    defaultto "1"
   end
 
+  ###########################################################################
+  # Properties for at-creation only
+  ###########################################################################
+  # These properties exist because, often, we want objects to be *created*
+  # with property values X, but still let the human operator change them
+  # without puppet getting in the way.
+  newproperty(:atcreate_connection_limit) do
+    desc "The connection limit of the poolmember at creation."
+
+    munge do |value|
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'atcreate_connection_limit' must be a number, not '#{value}'"
+      end
+    end
+  end
+
+  newproperty(:atcreate_description) do
+    desc "The description of the poolmember at creation."
+  end
+
+  newproperty(:atcreate_priority_group) do
+    desc "The priority group of the poolmember at creation."
+
+    munge do |value|
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'atcreate_priority_group' must be a number, not '#{value}'"
+      end
+    end
+  end
+
+  newproperty(:atcreate_rate_limit) do
+    desc "The rate_limit for the poolmember at creation."
+
+    munge do |value|
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'atcreate_rate_limit' must be a number, not '#{value}'"
+      end
+    end
+  end
+
+  newproperty(:atcreate_ratio) do
+    desc "The ratio of the poolmember at creation."
+
+    munge do |value|
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'atcreate_port' must be a number, not '#{value}'"
+      end
+    end
+  end
+
+  ###########################################################################
+  # Validation
+  ###########################################################################
   validate do
     if self[:ensure] == :present
       if self[:pool].nil?
