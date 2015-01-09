@@ -162,6 +162,7 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
           raise
         end
       end
+      raise
     end
     @property_hash = resource.to_hash
   end
