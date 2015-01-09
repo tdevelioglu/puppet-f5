@@ -44,7 +44,6 @@ Puppet::Type.newtype(:f5_node) do
         fail Puppet::Error, "'dynamic_ratio' must be a number, not '#{value}'"
       end
     end
-
   end
 
   newproperty(:ipaddress) do
@@ -101,10 +100,14 @@ Puppet::Type.newtype(:f5_node) do
     desc "The states that allows new sessions to be established for the
     specified node addresses."
 
+    munge do |value|
+      value.upcase
+    end
+
     validate do |value|
-      unless /^(DISABLED|ENABLED)$/.match(value)
-        fail Puppet::Error, "session_status must be one of:
-          DISABLED,ENABLED, not #{value}"
+      unless /^(DISABLED|ENABLED)$/i.match(value)
+        fail Puppet::Error, "session_status must be either
+          disabled or enabled, not #{value}"
       end
     end
   end
@@ -146,6 +149,41 @@ Puppet::Type.newtype(:f5_node) do
     end
   end
 
+  newproperty(:atcreate_dynamic_ratio) do
+    desc "The dynamic ratio of the node at creation."
+
+    munge do |value|
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'atcreate_dynamic_ratio' must be a number, not '#{value}'"
+      end
+    end
+  end
+
+  newproperty(:atcreate_health_monitors, :array_matching => :all) do
+    desc "The health monitors of the node at creation.
+    Specify the special value 'none' to disable
+    all monitors.
+    e.g.: ['/Common/icmp'. '/Common/http']"
+
+    def should_to_s(newvalue)
+      newvalue.inspect
+    end
+
+    # Override the default method because it assumes there is nothing to do if @should is empty
+    def insync?(is)
+      true
+    end
+
+    validate do |value|
+      unless Puppet::Util.absolute_path?(value) || value == "none" || value == "default"
+        fail Puppet::Error, "'atcreate_health_monitors' must be fully"\
+          "qualified (e.g. '/Common/http'), not '#{value}'"
+      end
+    end
+  end
+
   newproperty(:atcreate_rate_limit) do
     desc "The rate_limit for the node at creation."
 
@@ -174,6 +212,26 @@ Puppet::Type.newtype(:f5_node) do
         Integer(value)
       rescue
         fail Puppet::Error, "'atcreate_port' must be a number, not '#{value}'"
+      end
+    end
+  end
+
+  newproperty(:atcreate_session_status) do
+    desc "The states that allows new sessions to be established for the
+    specified node addresses at creation."
+
+    def insync?(is)
+      true
+    end
+
+    munge do |value|
+      value.upcase
+    end
+
+    validate do |value|
+      unless /^(DISABLED|ENABLED)$/i.match(value)
+        fail Puppet::Error, "atcreate_session_status must be either
+          disabled or enabled, not '#{value}'"
       end
     end
   end

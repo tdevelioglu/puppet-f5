@@ -244,7 +244,7 @@ Puppet::Type.newtype(:f5_poolmember) do
   end
 
   autorequire(:f5_node) do
-    self[:name]
+    self[:node]
   end
 
 end
