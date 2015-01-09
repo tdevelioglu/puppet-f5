@@ -146,8 +146,17 @@ Puppet::Type.newtype(:f5_poolmember) do
   # These properties exist because, often, we want objects to be *created*
   # with property values X, but still let the human operator change them
   # without puppet getting in the way.
+  #
+  # The atcreate properties are "special" as in that they are only used at
+  # creation. This causes a problem because there is no value to speak of after
+  # create.
+  # Thus we consider atcreate properties always in sync.
   newproperty(:atcreate_connection_limit) do
     desc "The connection limit of the poolmember at creation."
+
+    def insync?(is)
+      true
+    end
 
     munge do |value|
       begin
@@ -160,10 +169,19 @@ Puppet::Type.newtype(:f5_poolmember) do
 
   newproperty(:atcreate_description) do
     desc "The description of the poolmember at creation."
+
+    def insync?(is)
+      true
+    end
+
   end
 
   newproperty(:atcreate_priority_group) do
     desc "The priority group of the poolmember at creation."
+
+    def insync?(is)
+      true
+    end
 
     munge do |value|
       begin
@@ -177,6 +195,10 @@ Puppet::Type.newtype(:f5_poolmember) do
   newproperty(:atcreate_rate_limit) do
     desc "The rate_limit for the poolmember at creation."
 
+    def insync?(is)
+      true
+    end
+
     munge do |value|
       begin
         Integer(value)
@@ -188,6 +210,10 @@ Puppet::Type.newtype(:f5_poolmember) do
 
   newproperty(:atcreate_ratio) do
     desc "The ratio of the poolmember at creation."
+
+    def insync?(is)
+      true
+    end
 
     munge do |value|
       begin
