@@ -18,58 +18,41 @@ Puppet::Type.newtype(:f5_node) do
     end
   end
 
-  newparam(:force, :boolean => true) do
-    desc "LocalLB.NodeAddressV2 doesn't support updating ipaddress, so we
-      delete-create the node (and not in a transactional way).
-      This can potentially leave you with a deleted node!"
-
-    newvalues(:true, :false)
-
-    defaultto :false
-  end
-
   newproperty(:connection_limit) do
-    desc "The connection limit for the specified node."
-
-    validate do |value|
-      unless /^\d+$/.match(value)
-        fail Puppet::Error, "connection_limit must be a number, not #{value}"
-      end
-    end
+    desc "The connection limit of the node."
 
     munge do |value|
-      Integer(value)
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'connection_limit' must be a number, not '#{value}'"
+      end
     end
-
-    defaultto "0"
   end
 
   newproperty(:description) do
-    desc "The description for the specified node."
+    desc "The description of the node."
   end
 
   newproperty(:dynamic_ratio) do
-    desc "The dynamic ratio for the specified node."
+    desc "The dynamic ratio of the node."
 
-    validate do |value|
-      unless /^\d+$/.match(value)
-        fail Puppet::Error, "connection_limit must be a number, not #{value}"
+    munge do |value|
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'dynamic_ratio' must be a number, not '#{value}'"
       end
     end
 
-    munge do |value|
-      Integer(value)
-    end
-
-    defaultto "1"
   end
 
   newproperty(:ipaddress) do
-    desc "The ip address for the specified node"
+    desc "The ip address of the node"
   end
 
   newproperty(:health_monitors, :array_matching => :all) do
-    desc "The health monitors for the specified node.
+    desc "The health monitors of the node.
     Specify the special value 'none' to disable
     all monitors.
     e.g.: ['/Common/icmp'. '/Common/http']"
@@ -91,35 +74,27 @@ Puppet::Type.newtype(:f5_node) do
   end
 
   newproperty(:rate_limit) do
-    desc "The rate_limit for the specified node."
-
-    validate do |value|
-      unless /^\d+$/.match(value)
-        fail Puppet::Error, "rate_limit must be a number, not #{value}"
-      end
-    end
+    desc "The rate_limit of the node."
 
     munge do |value|
-      Integer(value)
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'rate_limit' must be a number, not '#{value}'"
+      end
     end
-
-    defaultto "0"
   end
 
   newproperty(:ratio) do
-    desc "The ratios for the specified node."
-
-    validate do |value|
-      unless /^\d+$/.match(value)
-        fail Puppet::Error, "ratio must be a number, not #{value}"
-      end
-    end
+    desc "The ratio of the node."
 
     munge do |value|
-      Integer(value)
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'ratio' must be a number, not '#{value}'"
+      end
     end
-
-    defaultto "1"
   end
 
   newproperty(:session_status) do
@@ -134,6 +109,78 @@ Puppet::Type.newtype(:f5_node) do
     end
   end
 
+  ###########################################################################
+  # Properties for at-creation only
+  ###########################################################################
+  # These properties exist because, often, we want objects to be *created*
+  # with property values X, but still let the human operator change them
+  # without puppet getting in the way.
+  #
+  # The atcreate properties are "special" as in that they are only used at
+  # creation. This causes a problem because there is no value to speak of after
+  # create.
+  # Thus we consider atcreate properties always in sync.
+  newproperty(:atcreate_connection_limit) do
+    desc "The connection limit of the node at creation."
+
+    def insync?(is)
+      true
+    end
+
+    munge do |value|
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'atcreate_connection_limit' must be a number, not '#{value}'"
+      end
+    end
+
+    defaultto 0 # unlimited
+  end
+
+  newproperty(:atcreate_description) do
+    desc "The description of the node at creation."
+
+    def insync?(is)
+      true
+    end
+  end
+
+  newproperty(:atcreate_rate_limit) do
+    desc "The rate_limit for the node at creation."
+
+    def insync?(is)
+      true
+    end
+
+    munge do |value|
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'atcreate_rate_limit' must be a number, not '#{value}'"
+      end
+    end
+  end
+
+  newproperty(:atcreate_ratio) do
+    desc "The ratio of the node at creation."
+
+    def insync?(is)
+      true
+    end
+
+    munge do |value|
+      begin
+        Integer(value)
+      rescue
+        fail Puppet::Error, "'atcreate_port' must be a number, not '#{value}'"
+      end
+    end
+  end
+
+  ###########################################################################
+  # Validation
+  ###########################################################################
   validate do
     if self[:ensure] != :absent and self[:ipaddress].nil?
       fail('ipaddress is required when ensure is present')

@@ -117,7 +117,7 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
     # long as we are the only one doing writes.
     #
     set_activefolder('/')
-    transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
+    enable_recursive_query
 
     names  = arraywrap(transport[wsdl].get(:get_list))
     getmsg = { nodes: { item: names } }
@@ -162,24 +162,29 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
     end
   end
 
+  ###########################################################################
+  # Exists/Create/Destroy
+  ###########################################################################
   def exists?
     @property_hash[:ensure] == :present
   end
 
   def create
-    @property_flush[:ensure]          = :create
-    @property_flush[:description]     = resource[:description]
-    @property_flush[:dynamic_ratio]   = resource[:dynamic_ratio]
-    @property_flush[:health_monitors] = resource[:health_monitors]
-    @property_flush[:rate_limit]      = resource[:rate_limit]
-    @property_flush[:ratio]           = resource[:ratio]
-    @property_flush[:session_status]  = resource[:session_status]
+    @property_flush[:ensure] = :create
+
+    [:connection_limit, :description, :dynamic_ratio, :health_monitors,
+     :rate_limit, :ratio, :session_status].each do |x|
+      @property_flush[x] = resource["atcreate_#{x}".to_sym] || resource[x]
+    end
   end
 
   def destroy
     @property_flush[:ensure] = :destroy
   end
 
+  ###########################################################################
+  # Setters
+  ###########################################################################
   def connection_limit=(value)
     @property_flush[:connection_limit] = value
   end
@@ -208,107 +213,70 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
     @property_flush[:session_status] = value
   end
 
+  ###########################################################################
+  # Flush
+  ###########################################################################
   def flush
-    @partition = File.dirname(resource[:name])
-
-    set_activefolder(@partition)
-    node = { nodes: { item: resource[:name] } }
+    @node = { nodes: { item: resource[:name] } }
+    set_activefolder('/Common')
 
     if @property_flush[:ensure] == :destroy
       begin
-        transport['System.Session'].call(:start_transaction)
-
+        start_transaction
         self.class.delete_poolmembers(resource[:name])
-        transport[wsdl].call(:delete_node_address, message: node)
-
-        transport['System.Session'].call(:submit_transaction)
+        soapcall(:delete_node_address)
+        submit_transaction
       rescue Exception => e
-        transport['System.Session'].call(:rollback_transaction)
-        raise e
+        begin
+          rollback_transaction
+        rescue Exception => e
+          if !e.message.include?("No transaction is open to roll back")
+            raise
+          end
+        end
       end
 
       return
     end
 
     begin
-      transport['System.Session'].call(:start_transaction)
-
+      start_transaction
       if @property_flush[:ensure] == :create
         message = node.merge(addresses: { item: resource[:ipaddress] },
-          limits: { item: resource[:connection_limit] })
+          limits: { item: @property_flush[:connection_limit] })
         transport[wsdl].call(:create, message: message)
-      end
-  
-      unless @property_flush[:ipaddress].nil?
-        if resource[:force]
-          # Disclaimer: I don't like this bit at all.
-          #
-          # LocalLB.NodeAddressV2 doesn't support updating ipaddress, so we
-          # delete-create the node.
-          # This can potentially leave you with a deleted node!
-          transport[wsdl].call(:delete_node_address, message: node)
-          transport['System.Session'].call(:submit_transaction)
-  
-          transport['System.Session'].call(:start_transaction)
-          transport[wsdl].create([resource[:name]], [@property_flush[:ipaddress]],
-            [@property_hash[:connection_limit]])
-  
-          # Restore node state
-          transport[wsdl].call(:set_connection_limit, message: node.merge(limits: { item: @property_hash[:connection_limit] }))
-          transport[wsdl].call(:set_description, message: node.merge( descriptions: { item: @property_hash[:description] }))
-          transport[wsdl].call(:set_dynamic_ratio_v2, message: node.merge( dynamic_ratios: { item: @property_hash[:dynamic_ratio] }))
-          transport[wsdl].call(:set_monitor_rule,message: node.merge(monitor_rules: { item: self.class.prop_to_monrule(@property_hash[:health_monitors]) }))
-          transport[wsdl].call(:set_rate_limit, message: node.merge( limits: { item: @property_hash[:rate_limit] }))
-          transport[wsdl].call(:set_ratio, message: node.merge(ratios: { item: @property_hash[:ratio] }))
-          transport[wsdl].call(:set_session_enabled_state, message: node.merge(states: { item: self.class.property_to_session_enabled_state(@property_hash[:session_status]) }))
 
-          transport['System.Session'].call(:submit_transaction)
-          transport['System.Session'].call(:start_transaction)
-        else
-          Puppet.notice("Parameter ipaddress has changed but force is " +
-            "#{resource[:force]}, not updating ipaddress.)")
-        end
-      end
-
-      unless @property_flush[:connection_limit].nil?
-        message = node.merge(limits: { item: @property_flush[:connection_limit] })
-        transport[wsdl].call(:set_connection_limit, message: message)
+        @property_flush.delete(:connection_limit)
       end
   
-      unless @property_flush[:description].nil?
-        message = node.merge(descriptions: { item: @property_flush[:description] })
-        transport[wsdl].call(:set_description, message: message)
+      if !@property_flush[:connection_limit].nil?
+        soapcall(:set_connection_limit, :limits, @property_flush[:connection_limit])
       end
-    
-      unless @property_flush[:dynamic_ratio].nil?
-        message = node.merge(dynamic_ratios: { item: @property_flush[:dynamic_ratio] })
-        transport[wsdl].call(:set_dynamic_ratio_v2, message: message)
+      if !@property_flush[:description].nil?
+        soapcall(:set_description, :descriptions, @property_flush[:description])
       end
-    
-      unless @property_flush[:health_monitors].nil?
-        message = node.merge( monitor_rules: { item: self.class.prop_to_monrule(@property_flush[:health_monitors]) })
-        transport[wsdl].call(:set_monitor_rule, message: message)
+      if !@property_flush[:dynamic_ratio].nil?
+        soapcall(:set_dynamic_ratio_v2, :dynamic_ratios, @property_flush[:dynamic_ratio])
       end
-  
-      unless @property_flush[:rate_limit].nil?
-        message = node.merge(limits: { item: @property_flush[:rate_limit] })
-        transport[wsdl].call(:set_rate_limit, message: message)
+      if !@property_flush[:health_monitors].nil?
+        soapcall(:set_monitor_rule, :monitor_rules,
+                 self.class.prop_to_monrule(@property_flush[:health_monitors]))
       end
-    
-      unless @property_flush[:ratio].nil?
-        message = node.merge(ratios: { item: @property_flush[:ratio] })
-        transport[wsdl].call(:set_ratio, message: message)
+      if !@property_flush[:rate_limit].nil?
+        soapcall(:set_rate_limit, :limits, @property_flush[:rate_limit])
       end
-    
-      unless @property_flush[:session_status].nil?
-        message = node.merge(states: { item: self.class.property_to_session_enabled_state(@property_flush[:session_status]) })
-        transport[wsdl].call(:set_session_enabled_state, message: message)
+      if !@property_flush[:ratio].nil?
+        soapcall(:set_ratio, :ratios, @property_flush[:ratio])
       end
-  
-      transport['System.Session'].call(:submit_transaction)
+      if !@property_flush[:session_status].nil?
+        soapcall(:set_session_enabled_state, :states,
+                 self.class.property_to_session_enabled_state(
+                   @property_flush[:session_status]))
+      end
+      submit_transaction
     rescue Exception => e
       begin
-        transport['System.Session'].call(:rollback_transaction)
+        rollback_transaction
       rescue Exception => e
         if !e.message.include?("No transaction is open to roll back")
           raise
@@ -316,7 +284,16 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
       end
       raise
     end
-
     @property_hash = resource.to_hash
   end
+
+  ###########################################################################
+  # Soap caller
+  ###########################################################################
+  def soapcall(method, key=nil, value=nil)
+    message = key.nil? ?
+      @node : @node.merge(key => { item: value })
+    transport[wsdl].call(method, message: message)
+  end
+
 end
