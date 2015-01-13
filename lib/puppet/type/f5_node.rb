@@ -113,22 +113,13 @@ Puppet::Type.newtype(:f5_node) do
   end
 
   ###########################################################################
-  # Properties for at-creation only
+  # Parameters used at creation.
   ###########################################################################
-  # These properties exist because, often, we want objects to be *created*
-  # with property values X, but still let the human operator change them
-  # without puppet getting in the way.
-  #
-  # The atcreate properties are "special" as in that they are only used at
-  # creation. This causes a problem because there is no value to speak of after
-  # create.
-  # Thus we consider atcreate properties always in sync.
-  newproperty(:atcreate_connection_limit) do
+  # These attributes are parameters because, often, we want objects to be
+  # *created* with property values X, but still let a human make changes
+  # to them without puppet getting in the way.
+  newparam(:atcreate_connection_limit) do
     desc "The connection limit of the node at creation."
-
-    def insync?(is)
-      true
-    end
 
     munge do |value|
       begin
@@ -141,15 +132,11 @@ Puppet::Type.newtype(:f5_node) do
     defaultto 0 # unlimited
   end
 
-  newproperty(:atcreate_description) do
+  newparam(:atcreate_description) do
     desc "The description of the node at creation."
-
-    def insync?(is)
-      true
-    end
   end
 
-  newproperty(:atcreate_dynamic_ratio) do
+  newparam(:atcreate_dynamic_ratio) do
     desc "The dynamic ratio of the node at creation."
 
     munge do |value|
@@ -161,7 +148,7 @@ Puppet::Type.newtype(:f5_node) do
     end
   end
 
-  newproperty(:atcreate_health_monitors, :array_matching => :all) do
+  newparam(:atcreate_health_monitors, :array_matching => :all) do
     desc "The health monitors of the node at creation.
     Specify the special value 'none' to disable
     all monitors.
@@ -169,11 +156,6 @@ Puppet::Type.newtype(:f5_node) do
 
     def should_to_s(newvalue)
       newvalue.inspect
-    end
-
-    # Override the default method because it assumes there is nothing to do if @should is empty
-    def insync?(is)
-      true
     end
 
     validate do |value|
@@ -184,12 +166,8 @@ Puppet::Type.newtype(:f5_node) do
     end
   end
 
-  newproperty(:atcreate_rate_limit) do
+  newparam(:atcreate_rate_limit) do
     desc "The rate_limit for the node at creation."
-
-    def insync?(is)
-      true
-    end
 
     munge do |value|
       begin
@@ -200,12 +178,8 @@ Puppet::Type.newtype(:f5_node) do
     end
   end
 
-  newproperty(:atcreate_ratio) do
+  newparam(:atcreate_ratio) do
     desc "The ratio of the node at creation."
-
-    def insync?(is)
-      true
-    end
 
     munge do |value|
       begin
@@ -216,13 +190,9 @@ Puppet::Type.newtype(:f5_node) do
     end
   end
 
-  newproperty(:atcreate_session_status) do
+  newparam(:atcreate_session_status) do
     desc "The states that allows new sessions to be established for the
     specified node addresses at creation."
-
-    def insync?(is)
-      true
-    end
 
     munge do |value|
       value.upcase
