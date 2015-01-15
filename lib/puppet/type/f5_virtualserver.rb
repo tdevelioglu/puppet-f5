@@ -139,6 +139,15 @@ Puppet::Type.newtype(:f5_virtualserver) do
     end
   end
 
+  newproperty(:oneconnect_profile) do
+    validate do |value|
+      unless Puppet::Util.absolute_path?(value)
+        fail Puppet::Error, "Parameter 'oneconnect_profile' must be"\
+          "fully qualified, not '#{value}'"
+      end
+    end
+  end
+
   newproperty(:protocol_profile_client) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
@@ -352,6 +361,15 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_http_profile' must be"\
+          "fully qualified, not '#{value}'"
+      end
+    end
+  end
+
+  newparam(:atcreate_oneconnect_profile) do
+    validate do |value|
+      unless Puppet::Util.absolute_path?(value)
+        fail Puppet::Error, "Parameter 'atcreate_oneconnect_profile' must be"\
           "fully qualified, not '#{value}'"
       end
     end

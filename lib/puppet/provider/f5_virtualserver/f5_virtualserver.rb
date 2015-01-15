@@ -53,7 +53,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
   end
 
   def self.profile_properties
-    [:ftp_profile, :http_profile, :protocol_profile_client,
+    [:ftp_profile, :http_profile, :oneconnect_profile, :protocol_profile_client,
      :protocol_profile_server, :responseadapt_profile, :requestadapt_profile,
      :sip_profile, :ssl_profiles_client, :ssl_profiles_server, :stream_profile,
      :statistics_profile, :xml_profile]
@@ -144,6 +144,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
 
     ftpprofiles             = Array.new(profileslistlist.size, nil)
     httpprofiles            = Array.new(profileslistlist.size, nil)
+    oneconnectprofiles      = Array.new(profileslistlist.size, nil)
     protocolprofiles_client = Array.new(profileslistlist.size, nil)
     protocolprofiles_server = Array.new(profileslistlist.size, nil)
     responseadaptprofiles   = Array.new(profileslistlist.size, nil)
@@ -186,6 +187,8 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
           responseadaptprofiles[idx] = profile[:profile_name]
         elsif profile[:profile_type] == 'PROFILE_TYPE_REQUESTADAPT'
           requestadaptprofiles[idx] = profile[:profile_name]
+        elsif profile[:profile_type] == 'PROFILE_TYPE_CONNECTION_POOL'
+          oneconnectprofiles[idx] = profile[:profile_name]
         end
       end
     end
@@ -213,6 +216,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
         :ftp_profile                  => ftpprofiles[idx],
         :http_profile                 => httpprofiles[idx],
         :name                         => names[idx],
+        :oneconnect_profile           => oneconnectprofiles[idx],
         :persistence_profile          => persistence_profiles[idx],
         :port                         => ports[idx],
         :protocol                     => protocols[idx],
@@ -271,11 +275,20 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
         propertyname.upcase).captures
       context = context || "ALL"
 
-      type = 'SIPP' if type == 'SIP'
-      arraywrap(property_hash[propertyname]).each do |profile|
-        profiles << { profile_name: profile,
-                      profile_type: "PROFILE_TYPE_#{context}_#{type}",
-                      profile_context: "PROFILE_CONTEXT_TYPE_#{context}" }
+      typemap = {
+        'SIP' => 'SIPP',
+        'ONECONNECT' => 'CONNECTION_POOL'
+      }
+      type = typemap[type] || type
+
+      profile_type = context == "ALL" ?
+        "PROFILE_TYPE_#{type}" :
+        "PROFILE_TYPE_#{context}_#{type}"
+      profile_context = "PROFILE_CONTEXT_TYPE_#{context}"
+      arraywrap(property_hash[propertyname]).each do |profile_name|
+        profiles << { profile_name: profile_name,
+                      profile_type: profile_type,
+                      profile_context: profile_context }
       end
     end
     profiles
