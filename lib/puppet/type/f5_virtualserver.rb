@@ -174,6 +174,17 @@ Puppet::Type.newtype(:f5_virtualserver) do
   end
 
   newproperty(:ssl_profiles_client, :array_matching => :all) do
+    # Override insync so it doesn't treat an empty list value 
+    # as nil.
+    def insync?(is)
+      is.sort == @should.sort
+    end
+
+    # Actually display an empty list.
+    def should_to_s(newvalue)
+      newvalue.inspect
+    end
+
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'ssl_profile_server' must be"\
@@ -183,6 +194,14 @@ Puppet::Type.newtype(:f5_virtualserver) do
   end
 
   newproperty(:ssl_profiles_server, :array_matching => :all) do
+    def insync?(is)
+      is.sort == @should.sort
+    end
+
+    def should_to_s(newvalue)
+      newvalue.inspect
+    end
+
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'ssl_profile_server' must be"\
