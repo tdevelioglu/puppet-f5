@@ -102,6 +102,17 @@ Puppet::Type.newtype(:f5_virtualserver) do
   # Profiles
   ###########################################################################
   newproperty(:auth_profiles, :array_matching => :all) do
+    # Override insync so it doesn't treat an empty list value 
+    # as nil.
+    def insync?(is)
+      is.sort == @should.sort
+    end
+
+    # Actually display an empty list.
+    def should_to_s(newvalue)
+      newvalue.inspect
+    end
+
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'auth_profiles' must be"\
