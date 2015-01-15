@@ -110,6 +110,10 @@ class Puppet::Provider::F5 < Puppet::Provider
     end
   end
 
+  def arraywrap(arg)
+    self.class.arraywrap(arg)
+  end
+
   def self.debug(msg)
     Puppet.debug("(#{self.name}): #{msg}")
   end

@@ -3,10 +3,65 @@ require 'puppet/provider/f5'
 Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppet::Provider::F5) do
   @doc = "Manages f5 irules"
 
+  # TODO: Move into Puppet::Provider::F5
+  def self.mk_resource_methods
+    [resource_type.validproperties, resource_type.parameters].flatten.each do |attr|
+      attr = attr.intern
+      next if attr == :name
+      define_method(attr) do
+        if @property_hash[attr].nil?
+          :absent
+        else
+          @property_hash[attr]
+        end
+      end
+
+      define_method(attr.to_s + "=") do |val|
+        @property_flush[attr] = val
+      end
+    end
+
+    define_method(:exists?) do
+      @property_hash[:ensure] == :present
+    end
+
+    properties = resource_type.validproperties
+    define_method(:create) do 
+      @property_flush[:ensure] = :create
+      properties.each do |x|
+        next if x == :ensure
+        @property_flush[x] = resource["atcreate_#{x}".to_sym] || resource[x]
+      end
+    end
+
+    define_method(:destroy) do
+      @property_flush[:ensure] = :destroy
+    end
+  end
+
   mk_resource_methods
 
   confine :feature => :ruby_savon
   defaultfor :feature => :ruby_savon
+
+  def self.protocol_profiles
+    ["/Common/tcp", "/Common/udp"]
+  end
+
+  def protocol_profiles
+    self.class.protocol_profiles
+  end
+
+  def self.profile_properties
+    [:ftp_profile, :http_profile, :protocol_profile_client,
+     :protocol_profile_server, :responseadapt_profile, :requestadapt_profile,
+     :sip_profile, :ssl_profiles_client, :ssl_profiles_server, :stream_profile,
+     :statistics_profile, :xml_profile]
+  end
+
+  def profile_properties
+    self.class.profile_properties
+  end
 
   def initialize(value={})
     super(value)
@@ -23,32 +78,56 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
 
   def self.instances
     instances = []
-
-    # Getting all info from an F5 is not transactional. But we're safe as
-    # long as we are the only one doing writes.
-    #
     set_activefolder('/')
-    transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
+    enable_recursive_query
 
-    names = arraywrap(transport[wsdl].get(:get_list))
-    getmsg = { virtual_servers: { item: names } }
+    names  = arraywrap(transport[wsdl].get(:get_list))
+    @getmsg = { virtual_servers: { item: names } }
+    def self.soapget(method)
+      arraywrap(transport[wsdl].get(method, @getmsg))
+    end
 
+    ##############################
+    # Addresses / Ports
+    ##############################
     addresses = []
     ports     = []
-    arraywrap(transport[wsdl].get(:get_destination, getmsg)).each do |destination|
-      addresses << destination[:address]
-      ports << destination[:port]
+    soapget(:get_destination).each do |dest|
+      addresses << dest[:address]
+      ports     << dest[:port]
     end
 
-    descriptions                  = arraywrap(transport[wsdl].get(:get_description, getmsg)).collect do |desc|
-      desc.nil? ? "" : desc
+    ##############################
+    # Descriptions
+    ##############################
+    descriptions =
+      soapget(:get_description).collect { |desc| desc.nil? ? "" : desc }
+
+    ##############################
+    # Default pools
+    ##############################
+    default_pools = soapget(:get_default_pool_name)
+
+    ##############################
+    # Authentication profiles
+    ##############################
+    authprofileslistlist =
+      soapget(:get_authentication_profile).collect do |profiles|
+        arraywrap(profiles[:item]) if !profiles.nil?
+      end
+    authprofiles = Array.new(authprofileslistlist.size) do |idx|
+      if !authprofileslistlist[idx].nil?
+        authprofileslistlist[idx].collect { |prof| prof[:profile_name] }
+      end
     end
 
-    default_pools                 = arraywrap(transport[wsdl].get(:get_default_pool_name, getmsg))
-    fallback_persistence_profiles = arraywrap(transport[wsdl].get(:get_fallback_persistence_profile, getmsg))
+    ##############################
+    # Persistence profiles
+    ##############################
+    fallback_persistence_profiles = soapget(:get_fallback_persistence_profile)
 
     persistence_profiles = []
-    arraywrap(transport[wsdl].get(:get_persistence_profile, getmsg)).each do |profile_list|
+    soapget(:get_persistence_profile).each do |profile_list|
       if !profile_list.nil?
         default_profile = profile_list.find{ |profile| profile[:default_profile] == true }
         persistence_profiles << default_profile[:profile_name]
@@ -57,38 +136,100 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
       end
     end
 
-    profiles = []
-    arraywrap(transport[wsdl].get(:get_profile, getmsg)).each do |profile_dict|
-      profile_names = []
-      if !profile_dict.nil?
-        [profile_dict[:item]].flatten.each do |profile|
-          profile_names << profile[:profile_name]
+    ##############################
+    # Profiles
+    ##############################
+    profileslistlist =
+      soapget(:get_profile).collect { |profiles| arraywrap(profiles[:item]) }
+
+    ftpprofiles             = Array.new(profileslistlist.size, nil)
+    httpprofiles            = Array.new(profileslistlist.size, nil)
+    protocolprofiles_client = Array.new(profileslistlist.size, nil)
+    protocolprofiles_server = Array.new(profileslistlist.size, nil)
+    responseadaptprofiles   = Array.new(profileslistlist.size, nil)
+    requestadaptprofiles    = Array.new(profileslistlist.size, nil)
+    sipprofiles             = Array.new(profileslistlist.size, nil)
+    sslprofiles_client      = Array.new(profileslistlist.size) { [] }
+    sslprofiles_server      = Array.new(profileslistlist.size) { [] }
+    statisticsprofiles      = Array.new(profileslistlist.size, nil)
+    streamprofiles          = Array.new(profileslistlist.size, nil)
+    xmlprofiles             = Array.new(profileslistlist.size, nil)
+    profileslistlist.each_with_index do |profileslist, idx|
+      profileslist.each do |profile|
+        if ['PROFILE_TYPE_TCP',
+            'PROFILE_TYPE_UDP'].include?(profile[:profile_type])
+          if profile[:profile_context] == 'PROFILE_CONTEXT_TYPE_ALL'
+            protocolprofiles_client[idx] = profile[:profile_name]
+            protocolprofiles_server[idx] = profile[:profile_name]
+          elsif profile[:profile_context] == 'PROFILE_CONTEXT_TYPE_CLIENT'
+            protocolprofiles_client[idx] = profile[:profile_name]
+          elsif profile[:profile_context] == 'PROFILE_CONTEXT_TYPE_SERVER'
+            protocolprofiles_server[idx] = profile[:profile_name]
+          end
+        elsif profile[:profile_type] == 'PROFILE_TYPE_CLIENT_SSL'
+          sslprofiles_client[idx] << profile[:profile_name]
+        elsif profile[:profile_type] == 'PROFILE_TYPE_SERVER_SSL'
+          sslprofiles_server[idx] << profile[:profile_name]
+        elsif profile[:profile_type] == 'PROFILE_TYPE_HTTP'
+          httpprofiles[idx] = profile[:profile_name]
+        elsif profile[:profile_type] == 'PROFILE_TYPE_FTP'
+          ftpprofiles[idx] = profile[:profile_name]
+        elsif profile[:profile_type] == 'PROFILE_TYPE_STREAM'
+          streamprofile[idx] = profile[:profile_name]
+        elsif profile[:profile_type] == 'PROFILE_TYPE_XML'
+          xmlprofiles[idx] = profile[:profile_name]
+        elsif profile[:profile_type] == 'PROFILE_TYPE_SIPP'
+          sipprofiles[idx] = profile[:profile_name]
+        elsif profile[:profile_type] == 'PROFILE_TYPE_STATISTICS'
+          statisticsprofiles[idx] = profile[:profile_name]
+        elsif profile[:profile_type] == 'PROFILE_TYPE_RESPONSEADAPT'
+          responseadaptprofiles[idx] = profile[:profile_name]
+        elsif profile[:profile_type] == 'PROFILE_TYPE_REQUESTADAPT'
+          requestadaptprofiles[idx] = profile[:profile_name]
         end
       end
-      profiles << profile_names
     end
 
-    protocols = arraywrap(transport[wsdl].get(:get_protocol, getmsg))
-    types     = arraywrap(transport[wsdl].get(:get_type, getmsg))
-    wildmasks = arraywrap(transport[wsdl].get(:get_wildmask, getmsg))
+    ##############################
+    # Protocols/Types/Wildmasks
+    ##############################
+    protocols =
+      soapget(:get_protocol).collect { |prot| prot.gsub("PROTOCOL_", "") }
+    types =
+      soapget(:get_type).collect { |type| type.gsub("RESOURCE_TYPE_", "") }
+    wildmasks = soapget(:get_wildmask)
 
-    names.each_index do |index|
+    ##############################
+    # Instantiate providers
+    ##############################
+    names.each_index do |idx|
       instances << new(
-        :name                         => names[index],
+        :address                      => addresses[idx],
+        :auth_profiles                => authprofiles[idx],
+        :default_pool                 => default_pools[idx],
+        :description                  => descriptions[idx],
         :ensure                       => :present,
-        :description                  => descriptions[index],
-        :address                      => addresses[index],
-        :default_pool                 => default_pools[index],
-        :port                         => ports[index],
-        :fallback_persistence_profile => fallback_persistence_profiles[index],
-        :persistence_profile          => persistence_profiles[index],
-        :protocol                     => protocols[index].gsub("PROTOCOL_", ""),
-        :profiles                     => profiles[index],
-        :type                         => types[index].gsub("RESOURCE_TYPE_", ""),
-        :wildmask                     => wildmasks[index],
+        :fallback_persistence_profile => fallback_persistence_profiles[idx],
+        :ftp_profile                  => ftpprofiles[idx],
+        :http_profile                 => httpprofiles[idx],
+        :name                         => names[idx],
+        :persistence_profile          => persistence_profiles[idx],
+        :port                         => ports[idx],
+        :protocol                     => protocols[idx],
+        :protocol_profile_client      => protocolprofiles_client[idx],
+        :protocol_profile_server      => protocolprofiles_server[idx],
+        :responseadapt_profile        => responseadaptprofiles[idx],
+        :requestadapt_profile         => requestadaptprofiles[idx],
+        :sip_profile                  => sipprofiles[idx],
+        :ssl_profiles_client          => sslprofiles_client[idx],
+        :ssl_profiles_server          => sslprofiles_server[idx],
+        :statistics_profile           => statisticsprofiles[idx],
+        :stream_profile               => streamprofiles[idx],
+        :type                         => types[idx],
+        :wildmask                     => wildmasks[idx],
+        :xml_profile                  => xmlprofiles[idx],
       )
     end
-
     instances
   end
 
@@ -102,200 +243,156 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     end
   end
 
-  # Profiles UDP/TCP/SCTP can not co-exist.
-  #
-  # When switching protocols we need to make sure the protocol profiles are removed.
-  def self.remove_protocol_profiles(vs)
-    protocol_profiles = [
-      { profile_name: "/Common/sctp" },
-      { profile_name: "/Common/tcp" },
-      { profile_name: "/Common/udp" }
-    ]
+  # Return a list of api profile object hashes that should be "flushed".
+  def all_profiles(property_hash)
+    profiles = []
 
-    remove_profiles = []
-    arraywrap(transport[wsdl].get(:get_profile, getmsg)).each do |profile_list|
-      profile_list.each do |profile|
-        if !protocol_profiles.find { |prof| prof[:profile_name] == profile[:profile_name] }.nil?
-          remove_profiles << { :profile_name => profile["profile_name"] }
-        end
+    client = property_hash[:protocol_profile_client] || property_hash[:protocol_profile_server]
+    server = property_hash[:protocol_profile_server] || property_hash[:protocol_profile_client]
+    if !client.nil?
+      if client == server
+        profiles << { :profile_name => client,
+                      :profile_type => nil,
+                      :profile_context => "PROFILE_CONTEXT_TYPE_ALL" }
+      else
+        profiles << { :profile_name => client,
+                      :profile_type => nil,
+                      :profile_context => "PROFILE_CONTEXT_TYPE_CLIENT" }
+        profiles << { :profile_name => server,
+                      :profile_type => nil,
+                      :profile_context => "PROFILE_CONTEXT_TYPE_SERVER" }
       end
     end
 
-    message = { virtual_servers: { item: vs }, profiles: { item: remove_profiles } }
-    transport[wsdl].call(:remove_profile, message: message)
+    (profile_properties - [:protocol_profile_client,
+                           :protocol_profile_server]).each do |propertyname|
+      property_hash[propertyname].nil? && next
+      type, context = /^([^_]+)_PROFILES?_?([^_]+)?$/.match(
+        propertyname.upcase).captures
+      context = context || "ALL"
+
+      type = 'SIPP' if type == 'SIP'
+      arraywrap(property_hash[propertyname]).each do |profile|
+        profiles << { profile_name: profile,
+                      profile_type: "PROFILE_TYPE_#{context}_#{type}",
+                      profile_context: "PROFILE_CONTEXT_TYPE_#{context}" }
+      end
+    end
+    profiles
   end
 
-  def exists?
-    @property_hash[:ensure] == :present
+  # Check if there are any profiles that need to be flushed.
+  def flush_profiles?
+    profile_properties.any? { |prop| !@property_flush[prop].nil? }
   end
 
-  def create
-    @property_flush[:ensure]                       = :create
-    @property_flush[:description]                  = resource[:description]
-    @property_flush[:fallback_persistence_profile] = resource[:fallback_persistence_profile]
-    @property_flush[:persistence_profile]          = resource[:persistence_profile]
-  end
-
-  def destroy
-    @property_flush[:ensure] = :destroy
-  end
-
-  def description=(value)
-    @property_flush[:description] = value
-  end
-
-  def address=(value)
-    @property_flush[:address] = value
-  end
-
-  def default_pool=(value)
-    @property_flush[:default_pool] = value
-  end
-
-  def fallback_persistence_profile=(value)
-    @property_flush[:fallback_persistence_profile] = value
-  end
-
-  def persistence_profile=(value)
-    @property_flush[:persistence_profile] = value
-  end
-
-  def port=(value)
-    @property_flush[:port] = value
-  end
-
-  def protocol=(value)
-    @property_flush[:protocol] = value
-  end
-
-  def profiles=(value)
-    @property_flush[:profiles] = value
-  end
-
-  def type=(value)
-    @property_flush[:type] = value
-  end
-
-  def wildmask=(value)
-    @property_flush[:wildmask] = value
-  end
-
+  ###########################################################################
+  # Flush
+  ###########################################################################
   def flush
-    partition = File.dirname(resource[:name])
-    set_activefolder(partition)
+    @vserver = { virtual_servers: { item: resource[:name] } }
+    set_activefolder('/Common')
 
-    vs = { virtual_servers: { item: resource[:name] } }
     if @property_flush[:ensure] == :destroy
-      transport[wsdl].call(:delete_virtual_server, message: vs)
+      ##############################
+      # Destroy
+      ##############################
+      soapcall(:delete_virtual_server)
       return
     end
 
     begin
-      transport['System.Session'].call(:start_transaction)
-
+      start_transaction
+      ##############################
+      # Create
+      ##############################
       if @property_flush[:ensure] == :create
         vs_definition = {
           name: resource[:name],
-          address: resource[:address],
-          port: resource[:port],
-          protocol: "PROTOCOL_#{resource[:protocol]}"
+          address: @property_flush[:address],
+          port: @property_flush[:port],
+          protocol: "PROTOCOL_#{@property_flush[:protocol]}"
         }
-        vs_resources = {
-          type: "RESOURCE_TYPE_#{resource[:type]}",
-          default_pool_name: resource[:default_pool]
-        }
-        vs_profiles = resource[:profiles].nil? ? [] :
-          resource[:profiles].map do |profile| {
-            profile_name: profile, profile_context: nil }
-          end
 
+        vs_resources = {
+          type: "RESOURCE_TYPE_#{@property_flush[:type]}",
+          default_pool_name: @property_flush[:default_pool]
+        }
+
+        # Pass empty hash if no profiles are declared to keep
+        # API happy. Saves us from having to determine a default.
+        if @property_flush[:profiles].nil? || @property_flush[:profiles].empty?
+          vs_profiles = {}
+        else
+          vs_profiles = { item: all_profiles(@property_flush) }
+        end
         message = {
           definitions: { item: vs_definition },
-          wildmasks:   { item: resource[:wildmask] },
+          wildmasks:   { item: @property_flush[:wildmask] },
           resources:   { item: vs_resources },
-          profiles:    { item: { item: vs_profiles } }
+          profiles:    { item: vs_profiles }
         }
         transport[wsdl].call(:create, message: message)
-      end
+      ##############################
+      # Modify
+      ##############################
+      else
+        # Destination (address/port)
+        if !@property_flush[:address].nil? || !@property_flush[:port].nil?
+          address = @property_flush[:address] || @property_hash[:address]
+          port = @property_flush[:port] || @property_hash[:port]
 
-      unless @property_flush[:description].nil?
-        message = vs.merge(descriptions: { item: @property_flush[:description] })
-        transport[wsdl].call(:set_description, message: message)
-      end
-
-      unless @property_flush[:address].nil? && @property_flush[:port].nil?
-        address = @property_flush[:address].nil? ?
-          @property_hash[:address] : @property_flush[:address]
-
-        port = @property_flush[:port].nil? ?
-          @property_hash[:port] : @property_flush[:port]
-
-        message = vs.merge(destinations: {
-          item: { :address => address,:port => port }
-        })
-        transport[wsdl].call(:set_destination, message: message)
-      end
-
-      unless @property_flush[:default_pool].nil?
-        message = vs.merge(default_pools: { item: @property_flush[:default_pool] })
-        transport[wsdl].call(:set_default_pool_name, message: message)
-      end
-
-      unless @property_flush[:fallback_persistence_profile].nil?
-        message = vs.merge(profile_names: {
-          item: @property_flush[:fallback_persistence_profile] 
-        })
-        transport[wsdl].call(:set_fallback_persistence_profile, message: message)
-      end
-
-      unless @property_flush[:persistence_profile].nil?
-        # Unless we're being created, OR there is no current persistence_profile
-        unless @property_hash[:persistence_profile].nil? ||
-          @property_hash[:persistence_profile].empty?
-
-          profile = { profile_name:  @property_hash[:persistence_profile], default_profile: true }
-          message = vs.merge(profiles: { item: profile })
-          transport[wsdl].call(:remove_persistence_profile, message: message)
+          soapcall(:set_destination, :destinations,
+                   { address: address, port: port })
         end
-
-        unless @property_flush[:persistence_profile].empty?
-          profile = { profile_name:  @property_flush[:persistence_profile], default_profile: true }
-          message = vs.merge(profiles: { item: profile })
-          transport[wsdl].call(:add_persistence_profile, message: message)
+        # Default_pool
+        if !@property_flush[:default_pool].nil?
+          soapcall(:set_default_pool_name, :default_pools,
+                   @property_flush[:default_pool])
+        end
+        # Profiles
+        if flush_profiles?
+         soapcall(:remove_all_profiles)
+         soapcall(:add_profile, :profiles, all_profiles(resource.to_hash), true)
+        end
+        # Protocol
+        if !@property_flush[:protocol].nil?
+          soapcall(:set_protocol, :protocols, "PROTOCOL_#{@property_flush[:protocol]}")
+        end
+        # Type
+        if !@property_flush[:type].nil?
+          soapcall(:set_type, :types, "RESOURCE_TYPE_#{@property_flush[:type]}")
+        end
+        # Wildmask
+        if !@property_flush[:wildmask].nil?
+          soapcall(:set_wildmask, :wildmasks, @property_flush[:wildmask])
         end
       end
-
-      unless @property_flush[:protocol].nil?
-        self.class.remove_protocol_profiles(resource[:name])
-
-        message = vs.merge(protocols: { item: "PROTOCOL_#{@property_flush[:protocol]}" })
-        transport[wsdl].call(:set_protocol, message: message)
+      ##############################
+      # Create/Modify
+      ##############################
+      # Description
+      if !@property_flush[:description].nil?
+        soapcall(:set_description, :descriptions, @property_flush[:description])
       end
-
-      unless @property_flush[:profiles].nil?
-        profiles = @property_hash[:profiles].map{ |p| { profile_name: p, profile_context: nil } }
-        message  = vs.merge(profiles: { item: { item: profiles } })
-        transport[wsdl].call(:remove_profile, message: message)
-
-        profiles = @property_flush[:profiles].map{ |p| { profile_name: p, profile_context: nil } }
-        message  = vs.merge(profiles: { item: { item: profiles } })
-        transport[wsdl].call(:add_profile, message: message)
+      # Fallback persistence profile
+      if !@property_flush[:fallback_persistence_profile].nil?
+        soapcall(:set_fallback_persistence_profile, :profile_names,
+                 @property_flush[:fallback_persistence_profile])
       end
-
-      unless @property_flush[:type].nil?
-        message = vs.merge(types: { item: "RESOURCE_TYPE_#{@property_flush[:type]}" })
-        transport[wsdl].call(:set_type, message: message)
+      # Persistence profile
+      if !@property_flush[:persistence_profile].nil?
+        profile_hash = {
+          profile_name: @property_flush[:persistence_profile],
+          default_profile: true
+        }
+        soapcall(:remove_all_persistence_profiles)
+        soapcall(:add_persistence_profile, :profiles,  profile_hash, true)
       end
-
-      unless @property_flush[:wildmask].nil?
-        message = vs.merge(wildmasks: { item: @property_flush[:wildmask] })
-        transport[wsdl].call(:set_wildmask, message: message)
-      end
-
-      transport['System.Session'].call(:submit_transaction)
+      submit_transaction
     rescue Exception
       begin
-        transport['System.Session'].call(:rollback_transaction)
+        rollback_transaction
       rescue Exception => e
         if !e.message.include?("No transaction is open to roll back")
           raise
@@ -303,7 +400,16 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
       end
       raise
     end
-
     @property_hash = resource.to_hash
+  end
+
+  ###########################################################################
+  # Soap caller
+  ###########################################################################
+  def soapcall(method, key=nil, value=nil, nest=false)
+    soapitem = nest ? { item: { item: value } } : { item:  value }
+
+    message = key.nil? ?  @vserver : @vserver.merge(key => soapitem)
+    transport[wsdl].call(method, message: message)
   end
 end
