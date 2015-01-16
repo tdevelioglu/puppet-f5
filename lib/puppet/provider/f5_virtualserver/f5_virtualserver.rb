@@ -111,15 +111,12 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     ##############################
     # Authentication profiles
     ##############################
-    authprofileslistlist =
+    authprofiles =
       soapget(:get_authentication_profile).collect do |profiles|
-        arraywrap(profiles[:item]) if !profiles.nil?
+        arraywrap(profiles[:item]).collect do |item|
+         item[:profile_name]
+        end if !profiles.nil?
       end
-    authprofiles = Array.new(authprofileslistlist.size) do |idx|
-      if !authprofileslistlist[idx].nil?
-        authprofileslistlist[idx].collect { |prof| prof[:profile_name] }
-      end
-    end
 
     ##############################
     # Persistence profiles
@@ -137,7 +134,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     end
 
     ##############################
-    # Profiles
+    # Other profiles
     ##############################
     profileslistlist =
       soapget(:get_profile).collect { |profiles| arraywrap(profiles[:item]) }
@@ -194,6 +191,22 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     end
 
     ##############################
+    # Source address translation
+    ##############################
+    snat_types = soapget(:get_source_address_translation_type)
+    source_address_translation = names.each_index.collect do |idx|
+      # Return snat pool name if source address translation is set to
+      # 'SNATPOOL', otherwise return the type.
+      if snat_types[idx] == 'SRC_TRANS_SNATPOOL'
+        snat_pools ||= soapget(:get_source_address_translation_snat_pool)
+        snat_pools[idx]
+      else
+        # Return just the type instead of the whole 'SRC_TRANS_*' bit
+        snat_types[idx][10..-1]
+      end
+    end
+
+    ##############################
     # Protocols/Types/Wildmasks
     ##############################
     protocols =
@@ -208,7 +221,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     names.each_index do |idx|
       instances << new(
         :address                      => addresses[idx],
-        :auth_profiles                => authprofiles[idx],
+        :auth_profiles                => authprofiles[idx] || [],
         :default_pool                 => default_pools[idx],
         :description                  => descriptions[idx],
         :ensure                       => :present,
@@ -225,6 +238,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
         :responseadapt_profile        => responseadaptprofiles[idx],
         :requestadapt_profile         => requestadaptprofiles[idx],
         :sip_profile                  => sipprofiles[idx],
+        :source_address_translation   => source_address_translation[idx],
         :ssl_profiles_client          => sslprofiles_client[idx],
         :ssl_profiles_server          => sslprofiles_server[idx],
         :statistics_profile           => statisticsprofiles[idx],
@@ -346,10 +360,12 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
           profiles:    { item: vs_profiles }
         }
         transport[wsdl].call(:create, message: message)
-      ##############################
-      # Modify
-      ##############################
       else
+      ##############################
+      # Create/Modify
+      ##############################
+      # Properties that are supported by the API create method.
+
         # Destination (address/port)
         if !@property_flush[:address].nil? || !@property_flush[:port].nil?
           address = @property_flush[:address] || @property_hash[:address]
@@ -365,8 +381,11 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
         end
         # Profiles
         if flush_profiles?
-         soapcall(:remove_all_profiles)
-         soapcall(:add_profile, :profiles, all_profiles(resource.to_hash), true)
+          all_profiles = all_profiles(resource.to_hash)
+          soapcall(:remove_all_profiles)
+          unless all_profiles.empty?
+            soapcall(:add_profile, :profiles, all_profiles(resource.to_hash), true)
+          end
         end
         # Protocol
         if !@property_flush[:protocol].nil?
@@ -382,8 +401,21 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
         end
       end
       ##############################
-      # Create/Modify
+      # Modify only
       ##############################
+      # Properties that are unsupported by the API create method.
+
+      # Authentication profiles
+      if !@property_flush[:auth_profiles].nil?
+        soapcall(:remove_all_authentication_profiles)
+        unless @property_flush[:auth_profiles].empty?
+          auth_profiles = @property_flush[:auth_profiles].collect do |x|
+            { priority: 0, profile_name: x }
+          end
+          soapcall(:add_authentication_profile, :profiles, auth_profiles, true)
+        end
+      end
+
       # Description
       if !@property_flush[:description].nil?
         soapcall(:set_description, :descriptions, @property_flush[:description])
@@ -401,6 +433,16 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
         }
         soapcall(:remove_all_persistence_profiles)
         soapcall(:add_persistence_profile, :profiles,  profile_hash, true)
+      end
+      if !@property_flush[:source_address_translation].nil?
+        if @property_flush[:source_address_translation] == 'AUTOMAP'
+          soapcall(:set_source_address_translation_automap)
+        elsif @property_flush[:source_address_translation] == 'NONE'
+          soapcall(:set_source_address_translation_none)
+        else
+          soapcall(:set_source_address_translation_snat_pool, :pools,
+                   @property_flush[:source_address_translation])
+        end
       end
       submit_transaction
     rescue Exception

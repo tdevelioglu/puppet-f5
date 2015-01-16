@@ -14,7 +14,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
         validate do |value|
           unless Puppet::Util.absolute_path?(value)
             fail Puppet::Error, "Parameter '#{name}' must be"\
-              "fully qualified, not '#{value}'"
+              "a fully qualified path, not '#{value}'"
           end
         end
       end
@@ -27,7 +27,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
         validate do |value|
           unless Puppet::Util.absolute_path?(value)
             fail Puppet::Error, "Parameter '#{name}' must be"\
-              "fully qualified, not '#{value}'"
+              "a fully qualified path, not '#{value}'"
           end
         end
       end
@@ -39,7 +39,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
 
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
-        fail Puppet::Error, "Virtualserver names must be fully qualified, not '#{value}'"
+        fail Puppet::Error, "Virtualserver names must be a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -89,7 +89,8 @@ Puppet::Type.newtype(:f5_virtualserver) do
          "OSPF", "SCTP", "UNKNOWN"]
 
       unless valid_protocols.include?(value.upcase)
-        fail Puppet::Error, "Parameter '#{self.name}' must be one of: #{valid_protocols.inspect}, not '#{value.upcase}'"
+        fail Puppet::Error, "Parameter '#{self.name}' must be one of:"\
+        " #{valid_protocols.inspect}, not '#{value.upcase}'"
       end
     end
 
@@ -98,12 +99,31 @@ Puppet::Type.newtype(:f5_virtualserver) do
     end
   end
 
+  newproperty(:source_address_translation) do
+    desc "The source address translation setting of the virtualserver"
+
+    validate do |value|
+      unless ['automap', 'none'].include?(value.downcase) ||
+        Puppet::Util.absolute_path?(value)
+        fail Puppet::Error, "'source_address_translation' must be 'automap',"\
+        " 'none' or a fully qualified path, not '#{value.downcase}'"
+      end
+    end
+
+    munge do |value|
+      value.upcase! if ['automap', 'none'].include?(value.downcase)
+      value
+    end
+  end
+
   ###########################################################################
   # Profiles
   ###########################################################################
   newproperty(:auth_profiles, :array_matching => :all) do
-    # Override insync so it doesn't treat an empty list value 
-    # as nil.
+#    def insync?(is)
+#      is == :absent && @should.empty? || is.sort == @should.sort
+#    end
+
     def insync?(is)
       is.sort == @should.sort
     end
@@ -116,7 +136,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'auth_profiles' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -125,7 +145,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'ftp_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -134,7 +154,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'http_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -143,7 +163,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'oneconnect_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -152,7 +172,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'protocol_profile_client' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -161,7 +181,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'protocol_profile_server' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -170,7 +190,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'responseadapt_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -179,7 +199,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'requestadapt_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -188,7 +208,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'sip_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -208,7 +228,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'ssl_profile_server' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -225,7 +245,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'ssl_profile_server' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -234,7 +254,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'stream_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -243,7 +263,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_statistics_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -252,7 +272,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'xml_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -270,7 +290,8 @@ Puppet::Type.newtype(:f5_virtualserver) do
          "DHCP_RELAY", "UNKNOWN", "INTERNAL"]
 
       unless valid_types.include?(value)
-        fail Puppet::Error, "Parameter 'type' must be one of: #{valid_types.inspect}, not '#{value}'"
+        fail Puppet::Error, "Parameter 'type' must be one of:"\
+        " #{valid_types.inspect}, not '#{value}'"
       end
     end
   end
@@ -328,7 +349,8 @@ Puppet::Type.newtype(:f5_virtualserver) do
          "OSPF", "SCTP", "UNKNOWN"]
 
       unless valid_protocols.include?(value)
-        fail Puppet::Error, "Parameter '#{self.name}' must be one of: #{valid_protocols.inspect}, not '#{value}'"
+        fail Puppet::Error, "Parameter '#{self.name}' must be one of:"\
+          " #{valid_protocols.inspect}, not '#{value}'"
       end
     end
 
@@ -343,7 +365,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_auth_profiles' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -352,7 +374,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_ftp_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -361,7 +383,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_http_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -370,7 +392,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_oneconnect_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -379,7 +401,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_protocol_profile_client'"\
-          "must be fully qualified, not '#{value}'"
+          " must be a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -388,7 +410,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_protocol_profile_server'"\
-          "must be fully qualified, not '#{value}'"
+          " must be a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -397,7 +419,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_requestadapt_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -406,7 +428,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_responseadapt_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -415,7 +437,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_sip_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -424,7 +446,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_ssl_profile_server' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -433,7 +455,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_ssl_profile_server' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -442,7 +464,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_statistics_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -451,7 +473,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_stream_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
     end
   end
@@ -460,8 +482,25 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_xml_profile' must be"\
-          "fully qualified, not '#{value}'"
+          " a fully qualified path, not '#{value}'"
       end
+    end
+  end
+
+  newparam(:atcreate_source_address_translation) do
+    desc "The source address translation setting of the virtualserver"
+
+    validate do |value|
+      unless ['AUTOMAP', 'NONE'].include?(value.upcase) ||
+        Puppet::Util.absolute_path?(value)
+        fail Puppet::Error, "'atcreate_source_address_translation' must be"\
+        " 'automap', 'none' or a fully qualified path, not '#{value}'"
+      end
+    end
+
+    munge do |value|
+      value.upcase! if ['automap', 'none'].include?(value.downcase)
+      value
     end
   end
 
@@ -474,7 +513,8 @@ Puppet::Type.newtype(:f5_virtualserver) do
          "DHCP_RELAY", "UNKNOWN", "INTERNAL"]
 
       unless valid_types.include?(value.upcase)
-        fail Puppet::Error, "Parameter 'type' must be one of: #{valid_types.inspect}, not '#{value.upcase}'"
+        fail Puppet::Error, "Parameter 'type' must be one of:"\
+          " #{valid_types.inspect}, not '#{value.upcase}'"
       end
     end
 
