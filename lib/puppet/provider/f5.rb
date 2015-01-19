@@ -145,4 +145,37 @@ class Puppet::Provider::F5 < Puppet::Provider
   def rollback_transaction
     transport['System.Session'].call(:rollback_transaction)
   end
+
+  def self.soapget_names(method=:get_list)
+    @names ||= arraywrap(transport[wsdl].get(:get_list))
+  end
+
+  def self.soapget(method, key, names=soapget_names)
+    getmsg = { key => { item: names} }
+    arraywrap(transport[wsdl].get(method, getmsg))
+  end
+
+  # Cleans up nested item responses from savon and returns a list of lists with
+  # optionally extracted item 'key'.
+  def self.soapget_listlist(method, key=nil)
+    listlist = soapget(method.intern)
+    if listlist.empty?
+      # Empty hash - (single virtualserver without objects)
+      result = [[]]
+    else
+      result = Array.new(listlist.size) { [] }
+      listlist.each_with_index do |list, idx|
+        list.nil? && next
+        if key.nil?
+          result[idx] = arraywrap(list[:item])
+        else
+          arraywrap(list[:item]).each do |item|
+            result[idx] << item[key.intern]
+          end
+        end
+      end
+    end
+    result
+  end
+
 end

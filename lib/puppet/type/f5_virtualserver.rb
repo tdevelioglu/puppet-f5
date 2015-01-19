@@ -8,32 +8,6 @@ Puppet::Type.newtype(:f5_virtualserver) do
     defaultto :present
   end
 
-  def mk_profile_property(*names)
-    names.each do
-      newproperty(name.to_sym) do
-        validate do |value|
-          unless Puppet::Util.absolute_path?(value)
-            fail Puppet::Error, "Parameter '#{name}' must be"\
-              "a fully qualified path, not '#{value}'"
-          end
-        end
-      end
-    end
-  end
-
-  def mk_profile_parameter(*names)
-    names.each do
-      newproperty(name.to_sym) do
-        validate do |value|
-          unless Puppet::Util.absolute_path?(value)
-            fail Puppet::Error, "Parameter '#{name}' must be"\
-              "a fully qualified path, not '#{value}'"
-          end
-        end
-      end
-    end
-  end
-
   newparam(:name, :namevar=>true) do
     desc "The virtualserver name."
 
@@ -199,6 +173,26 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'requestadapt_profile' must be"\
+          " a fully qualified path, not '#{value}'"
+      end
+    end
+  end
+
+  newproperty(:rules, :array_matching => :all) do
+    def insync?(is)
+      # Don't sort here because the order of rules matters,
+      # (we do sort on priority during prefetch)
+      is == @should
+    end
+
+    # Actually display an empty list.
+    def should_to_s(newvalue)
+      newvalue.inspect
+    end
+
+    validate do |value|
+      unless Puppet::Util.absolute_path?(value)
+        fail Puppet::Error, "Parameter 'rules' must be"\
           " a fully qualified path, not '#{value}'"
       end
     end
@@ -482,6 +476,15 @@ Puppet::Type.newtype(:f5_virtualserver) do
     validate do |value|
       unless Puppet::Util.absolute_path?(value)
         fail Puppet::Error, "Parameter 'atcreate_xml_profile' must be"\
+          " a fully qualified path, not '#{value}'"
+      end
+    end
+  end
+
+  newparam(:atcreate_rules, :array_matching => :all) do
+    validate do |value|
+      unless Puppet::Util.absolute_path?(value)
+        fail Puppet::Error, "Parameter 'atcreate_rules' must be"\
           " a fully qualified path, not '#{value}'"
       end
     end

@@ -76,16 +76,14 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     self.class.wsdl
   end
 
+  def self.soapget(method)
+    super(method, :virtual_servers)
+  end
+
   def self.instances
     instances = []
     set_activefolder('/')
     enable_recursive_query
-
-    names  = arraywrap(transport[wsdl].get(:get_list))
-    @getmsg = { virtual_servers: { item: names } }
-    def self.soapget(method)
-      arraywrap(transport[wsdl].get(method, @getmsg))
-    end
 
     ##############################
     # Addresses / Ports
@@ -101,7 +99,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     # Descriptions
     ##############################
     descriptions =
-      soapget(:get_description).collect { |desc| desc.nil? ? "" : desc }
+      soapget(:get_description).map { |desc| desc.nil? ? "" : desc }
 
     ##############################
     # Default pools
@@ -111,12 +109,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     ##############################
     # Authentication profiles
     ##############################
-    authprofiles =
-      soapget(:get_authentication_profile).collect do |profiles|
-        arraywrap(profiles[:item]).collect do |item|
-         item[:profile_name]
-        end if !profiles.nil?
-      end
+    authprofiles = soapget_listlist(:get_authentication_profile, :profile_name)
 
     ##############################
     # Persistence profiles
@@ -137,7 +130,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     # Other profiles
     ##############################
     profileslistlist =
-      soapget(:get_profile).collect { |profiles| arraywrap(profiles[:item]) }
+      soapget(:get_profile).map { |profiles| arraywrap(profiles[:item]) }
 
     ftpprofiles             = Array.new(profileslistlist.size, nil)
     httpprofiles            = Array.new(profileslistlist.size, nil)
@@ -194,7 +187,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     # Source address translation
     ##############################
     snat_types = soapget(:get_source_address_translation_type)
-    source_address_translation = names.each_index.collect do |idx|
+    source_address_translation = soapget_names.each_index.map do |idx|
       # Return snat pool name if source address translation is set to
       # 'SNATPOOL', otherwise return the type.
       if snat_types[idx] == 'SRC_TRANS_SNATPOOL'
@@ -210,25 +203,34 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     # Protocols/Types/Wildmasks
     ##############################
     protocols =
-      soapget(:get_protocol).collect { |prot| prot.gsub("PROTOCOL_", "") }
+      soapget(:get_protocol).map { |prot| prot.gsub("PROTOCOL_", "") }
     types =
-      soapget(:get_type).collect { |type| type.gsub("RESOURCE_TYPE_", "") }
+      soapget(:get_type).map { |type| type.gsub("RESOURCE_TYPE_", "") }
     wildmasks = soapget(:get_wildmask)
+
+    ##############################
+    # Irules
+    ##############################
+    # We need to order the rules in the list by their priority because we map
+    # order to priority during set.
+    rules = soapget_listlist(:get_rule).map do |rulelist|
+      rulelist.sort { |rule| rule[:priority].to_i }.map { |x| x[:rule_name] }
+    end
 
     ##############################
     # Instantiate providers
     ##############################
-    names.each_index do |idx|
+    soapget_names.each_index do |idx|
       instances << new(
         :address                      => addresses[idx],
-        :auth_profiles                => authprofiles[idx] || [],
+        :auth_profiles                => authprofiles[idx],
         :default_pool                 => default_pools[idx],
         :description                  => descriptions[idx],
         :ensure                       => :present,
         :fallback_persistence_profile => fallback_persistence_profiles[idx],
         :ftp_profile                  => ftpprofiles[idx],
         :http_profile                 => httpprofiles[idx],
-        :name                         => names[idx],
+        :name                         => soapget_names[idx],
         :oneconnect_profile           => oneconnectprofiles[idx],
         :persistence_profile          => persistence_profiles[idx],
         :port                         => ports[idx],
@@ -237,6 +239,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
         :protocol_profile_server      => protocolprofiles_server[idx],
         :responseadapt_profile        => responseadaptprofiles[idx],
         :requestadapt_profile         => requestadaptprofiles[idx],
+        :rules                        => rules[idx],
         :sip_profile                  => sipprofiles[idx],
         :source_address_translation   => source_address_translation[idx],
         :ssl_profiles_client          => sslprofiles_client[idx],
@@ -409,7 +412,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
       if !@property_flush[:auth_profiles].nil?
         soapcall(:remove_all_authentication_profiles)
         unless @property_flush[:auth_profiles].empty?
-          auth_profiles = @property_flush[:auth_profiles].collect do |x|
+          auth_profiles = @property_flush[:auth_profiles].map do |x|
             { priority: 0, profile_name: x }
           end
           soapcall(:add_authentication_profile, :profiles, auth_profiles, true)
@@ -420,11 +423,25 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
       if !@property_flush[:description].nil?
         soapcall(:set_description, :descriptions, @property_flush[:description])
       end
+
       # Fallback persistence profile
       if !@property_flush[:fallback_persistence_profile].nil?
         soapcall(:set_fallback_persistence_profile, :profile_names,
                  @property_flush[:fallback_persistence_profile])
       end
+
+      # Irules
+      if !@property_flush[:rules].nil?
+        soapcall(:remove_all_rules)
+        unless @property_flush[:rules].empty? 
+          rule_api_objects =
+            @property_flush[:rules].each_with_index.map do |rule_name, idx|
+            { rule_name: rule_name, priority: idx }
+          end
+          soapcall(:add_rule, :rules, rule_api_objects, true)
+        end
+      end
+
       # Persistence profile
       if !@property_flush[:persistence_profile].nil?
         profile_hash = {
@@ -434,6 +451,8 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
         soapcall(:remove_all_persistence_profiles)
         soapcall(:add_persistence_profile, :profiles,  profile_hash, true)
       end
+
+      # Source address translation
       if !@property_flush[:source_address_translation].nil?
         if @property_flush[:source_address_translation] == 'AUTOMAP'
           soapcall(:set_source_address_translation_automap)
