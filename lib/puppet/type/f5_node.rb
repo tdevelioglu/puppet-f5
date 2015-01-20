@@ -46,7 +46,7 @@ Puppet::Type.newtype(:f5_node) do
     end
   end
 
-  newproperty(:ipaddress) do
+  newparam(:ipaddress) do
     desc "The ip address of the node"
   end
 
@@ -128,7 +128,6 @@ Puppet::Type.newtype(:f5_node) do
         fail Puppet::Error, "'atcreate_connection_limit' must be a number, not '#{value}'"
       end
     end
-
     defaultto 0 # unlimited
   end
 
@@ -148,20 +147,20 @@ Puppet::Type.newtype(:f5_node) do
     end
   end
 
-  newparam(:atcreate_health_monitors, :array_matching => :all) do
+  newparam(:atcreate_health_monitors) do
     desc "The health monitors of the node at creation.
     Specify the special value 'none' to disable
     all monitors.
     e.g.: ['/Common/icmp'. '/Common/http']"
 
-    def should_to_s(newvalue)
-      newvalue.inspect
-    end
-
     validate do |value|
-      unless Puppet::Util.absolute_path?(value) || value == "none" || value == "default"
-        fail Puppet::Error, "'atcreate_health_monitors' must be fully"\
-          "qualified (e.g. '/Common/http'), not '#{value}'"
+      value = [value] unless value.is_a?(Array)
+
+      value.each do |item|
+        unless Puppet::Util.absolute_path?(item) || item == "none" || item == "default"
+          fail Puppet::Error, "'atcreate_health_monitors' must be fully"\
+            "qualified (e.g. '/Common/http'), not '#{value}'"
+        end
       end
     end
   end

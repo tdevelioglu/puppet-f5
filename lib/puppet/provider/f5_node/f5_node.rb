@@ -163,57 +163,6 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
   end
 
   ###########################################################################
-  # Exists/Create/Destroy
-  ###########################################################################
-  def exists?
-    @property_hash[:ensure] == :present
-  end
-
-  def create
-    @property_flush[:ensure] = :create
-
-    [:connection_limit, :description, :dynamic_ratio, :health_monitors,
-     :rate_limit, :ratio, :session_status].each do |x|
-      @property_flush[x] = resource["atcreate_#{x}".to_sym] || resource[x]
-    end
-  end
-
-  def destroy
-    @property_flush[:ensure] = :destroy
-  end
-
-  ###########################################################################
-  # Setters
-  ###########################################################################
-  def connection_limit=(value)
-    @property_flush[:connection_limit] = value
-  end
-
-  def description=(value)
-    @property_flush[:description] = value
-  end
-
-  def dynamic_ratio=(value)
-    @property_flush[:dynamic_ratio] = value
-  end
-
-  def health_monitors=(value)
-    @property_flush[:health_monitors] = value
-  end
-
-  def ipaddress=(value)
-    @property_flush[:ipaddress] = value
-  end
-
-  def rate_limit=(value)
-    @property_flush[:rate_limit] = value
-  end
-
-  def session_status=(value)
-    @property_flush[:session_status] = value
-  end
-
-  ###########################################################################
   # Flush
   ###########################################################################
   def flush
@@ -235,7 +184,6 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
           end
         end
       end
-
       return
     end
 
@@ -245,13 +193,12 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
         message = @node.merge(addresses: { item: resource[:ipaddress] },
           limits: { item: @property_flush[:connection_limit] })
         transport[wsdl].call(:create, message: message)
+      else
+        if !@property_flush[:connection_limit].nil?
+          soapcall(:set_connection_limit, :limits, @property_flush[:connection_limit])
+        end
+      end
 
-        @property_flush.delete(:connection_limit)
-      end
-  
-      if !@property_flush[:connection_limit].nil?
-        soapcall(:set_connection_limit, :limits, @property_flush[:connection_limit])
-      end
       if !@property_flush[:description].nil?
         soapcall(:set_description, :descriptions, @property_flush[:description])
       end

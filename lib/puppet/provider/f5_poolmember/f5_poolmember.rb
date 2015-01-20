@@ -21,41 +21,43 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
     self.class.wsdl
   end
 
-  def self.get
+  def self.soapget_pools
+    @pools ||= arraywrap(transport[wsdl].get(:get_list))
+  end
+
+  def self.soapget_names
+    @names ||= soapget_listlist(
+      :get_member_v2, nil, { pool_names: { item: soapget_pools } })
+  end
+
+  def self.soapget(method)
+    getmsg  = { pool_names: { item: soapget_pools }, members: { item: soapget_names } }
+    arraywrap(transport[wsdl].get(method, getmsg))
   end
 
   def self.instances
     instances = []
-    # Getting all poolmember info from an F5 is not transactional. But we're safe as
-    # long as we are the only one doing writes.
-    #
     set_activefolder('/')
     enable_recursive_query
 
-    pools   = arraywrap(transport[wsdl].get(:get_list))
-    members = arraywrap(transport[wsdl].get(:get_member_v2, { pool_names: { item: pools } }))
-    getmsg  = { pool_names: { item: pools }, members: { item: members } }
+    connection_limits = soapget_listlist(:get_member_connection_limit)
+    descriptions      = soapget_listlist(:get_member_description)
+    priority_groups   = soapget_listlist(:get_member_priority)
+    rate_limits       = soapget_listlist(:get_member_rate_limit)
+    ratios            = soapget_listlist(:get_member_ratio)
 
-    connection_limits = arraywrap(transport[wsdl].get(:get_member_connection_limit, getmsg))
-    descriptions      = arraywrap(transport[wsdl].get(:get_member_description, getmsg))
-    priority_groups   = arraywrap(transport[wsdl].get(:get_member_priority, getmsg))
-    rate_limits       = arraywrap(transport[wsdl].get(:get_member_rate_limit, getmsg))
-    ratios            = arraywrap(transport[wsdl].get(:get_member_ratio, getmsg))
-
-    members.each_with_index do |dict, idx1|
-      dict.nil? ? next : pms = arraywrap(dict[:item])
-      pms.each_with_index do |pm, idx2|
+    soapget_names.each_with_index do |pmlist, idx1|
+      pmlist.each_with_index do |pm, idx2|
         instances << new(
           :ensure           => :present,
           :name             => pm[:address],
-          :pool             => pools[idx1],
+          :pool             => soapget_pools[idx1],
           :port             => pm[:port],
-          :connection_limit => arraywrap(connection_limits[idx1][:item])[idx2],
-          :description      => arraywrap(descriptions[idx1][:item])[idx2].nil? ?
-            "" : arraywrap(descriptions[idx1][:item])[idx2],
-          :priority_group   => arraywrap(priority_groups[idx1][:item])[idx2],
-          :rate_limit       => arraywrap(rate_limits[idx1][:item])[idx2],
-          :ratio            => arraywrap(ratios[idx1][:item])[idx2],
+          :connection_limit => connection_limits[idx1][idx2],
+          :description      => descriptions[idx1][idx2] || "",
+          :priority_group   => priority_groups[idx1][idx2],
+          :rate_limit       => rate_limits[idx1][idx2],
+          :ratio            => ratios[idx1][idx2],
         )
       end
     end
@@ -72,49 +74,6 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
         resource.provider = provider
       end
     end
-  end
-
-  ###########################################################################
-  # Exists/Create/Destroy
-  ###########################################################################
-  def exists?
-    @property_hash[:ensure] == :present
-  end
-
-  def create
-    @property_flush[:ensure] = :create
-
-    [:connection_limit, :description, :priority_group, :rate_limit,
-     :ratio].each do |x|
-      @property_flush[x] = resource["atcreate_#{x}".to_sym] || resource[x]
-    end
-  end
-
-  def destroy
-    @property_flush[:ensure] = :destroy
-  end
-
-  ###########################################################################
-  # Setters
-  ###########################################################################
-  def connection_limit=(value)
-    @property_flush[:connection_limit] = value
-  end
-
-  def description=(value)
-    @property_flush[:description] = value
-  end
-
-  def priority_group=(value)
-    @property_flush[:priority_group] = value
-  end
-
-  def rate_limit=(value)
-    @property_flush[:rate_limit] = value
-  end
-
-  def ratio=(value)
-    @property_flush[:ratio] = value
   end
 
   ###########################################################################

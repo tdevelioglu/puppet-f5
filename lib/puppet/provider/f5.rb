@@ -151,16 +151,20 @@ class Puppet::Provider::F5 < Puppet::Provider
   end
 
   def self.soapget(method, key, names=soapget_names)
-    getmsg = { key => { item: names} }
-    arraywrap(transport[wsdl].get(method, getmsg))
+    message = { key => { item: names} }
+    arraywrap(transport[wsdl].get(method, message))
   end
 
   # Cleans up nested item responses from savon and returns a list of lists with
   # optionally extracted item 'key'.
-  def self.soapget_listlist(method, key=nil)
-    listlist = soapget(method.intern)
+  def self.soapget_listlist(method, key=nil, message=nil)
+    if message.nil?
+      listlist = soapget(method.intern)
+    else
+      listlist = arraywrap(transport[wsdl].get(method, message))
+    end
+
     if listlist.empty?
-      # Empty hash - (single virtualserver without objects)
       result = [[]]
     else
       result = Array.new(listlist.size) { [] }
@@ -176,6 +180,41 @@ class Puppet::Provider::F5 < Puppet::Provider
       end
     end
     result
+  end
+
+  def self.mk_resource_methods
+    [resource_type.validproperties, resource_type.parameters].flatten.each do |attr|
+      attr = attr.intern
+      next if attr == :name
+      define_method(attr) do
+        if @property_hash[attr].nil?
+          :absent
+        else
+          @property_hash[attr]
+        end
+      end
+
+      define_method(attr.to_s + "=") do |val|
+        @property_flush[attr] = val
+      end
+    end
+
+    define_method(:exists?) do
+      @property_hash[:ensure] == :present
+    end
+
+    properties = resource_type.validproperties
+    define_method(:create) do 
+      @property_flush[:ensure] = :create
+      properties.each do |x|
+        next if x == :ensure
+        @property_flush[x] = resource[x] || resource["atcreate_#{x}".to_sym]
+      end
+    end
+
+    define_method(:destroy) do
+      @property_flush[:ensure] = :destroy
+    end
   end
 
 end

@@ -3,54 +3,10 @@ require 'puppet/provider/f5'
 Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppet::Provider::F5) do
   @doc = "Manages f5 irules"
 
-  # TODO: Move into Puppet::Provider::F5
-  def self.mk_resource_methods
-    [resource_type.validproperties, resource_type.parameters].flatten.each do |attr|
-      attr = attr.intern
-      next if attr == :name
-      define_method(attr) do
-        if @property_hash[attr].nil?
-          :absent
-        else
-          @property_hash[attr]
-        end
-      end
-
-      define_method(attr.to_s + "=") do |val|
-        @property_flush[attr] = val
-      end
-    end
-
-    define_method(:exists?) do
-      @property_hash[:ensure] == :present
-    end
-
-    properties = resource_type.validproperties
-    define_method(:create) do 
-      @property_flush[:ensure] = :create
-      properties.each do |x|
-        next if x == :ensure
-        @property_flush[x] = resource["atcreate_#{x}".to_sym] || resource[x]
-      end
-    end
-
-    define_method(:destroy) do
-      @property_flush[:ensure] = :destroy
-    end
-  end
-
   mk_resource_methods
 
   confine :feature => :ruby_savon
   defaultfor :feature => :ruby_savon
-
-  def self.protocol_profiles
-    ["/Common/tcp", "/Common/udp"]
-  end
-
-  def protocol_profiles
-    self.class.protocol_profiles
-  end
 
   def self.profile_properties
     [:ftp_profile, :http_profile, :oneconnect_profile, :protocol_profile_client,
@@ -367,7 +323,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
       ##############################
       # Create/Modify
       ##############################
-      # Properties that are supported by the API create method.
+      # Properties that are supported in the API create method.
 
         # Destination (address/port)
         if !@property_flush[:address].nil? || !@property_flush[:port].nil?

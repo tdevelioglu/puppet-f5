@@ -199,7 +199,7 @@ Puppet::Type.newtype(:f5_poolmember) do
   end
 
   ###########################################################################
-  # Validation
+  # Validation / Autorequire
   ###########################################################################
   validate do
     if self[:ensure] == :present
