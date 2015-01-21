@@ -147,7 +147,7 @@ class Puppet::Provider::F5 < Puppet::Provider
   end
 
   def self.soapget_names(method=:get_list)
-    @names ||= arraywrap(transport[wsdl].get(:get_list))
+    @names ||= arraywrap(transport[wsdl].get(method))
   end
 
   def self.soapget(method, key, names=soapget_names)
@@ -155,8 +155,9 @@ class Puppet::Provider::F5 < Puppet::Provider
     arraywrap(transport[wsdl].get(method, message))
   end
 
-  # Cleans up nested item responses from savon and returns a list of lists with
-  # optionally extracted item 'key'.
+  # Cleans up nested item responses from savon and returns a list of lists of
+  # attributes, with optionally extracted item 'key'.
+  # This method requires an override of soapget() that sets its key parameter.
   def self.soapget_listlist(method, key=nil, message=nil)
     if message.nil?
       listlist = soapget(method.intern)

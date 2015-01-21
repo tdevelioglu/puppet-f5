@@ -23,18 +23,17 @@ Puppet::Type.type(:f5_irule).provide(:f5_irule, :parent => Puppet::Provider::F5)
 
   def self.instances
     instances = []
-
     set_activefolder('/')
-    transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
+    enable_recursive_query
 
-    rule_names = arraywrap(transport[wsdl].get(:get_list))
+    rule_names = soapget_names(:get_list)
     rules      = arraywrap(transport[wsdl].get(:query_all_rules))
 
-    # We need to add the rules that have an empty definition as those are not returned by
-    # query_all_rules.
+    # We need to add the rules that have an empty definition as those are not
+    # returned by query_all_rules.
     empty_def_rules = []
     rule_names.each do |rule_name|
-      if rules.find { |rule| rule[:rule_name] == rule_name }.nil?
+      if !rules.any? { |rule| rule[:rule_name] == rule_name }
         empty_def_rules << { rule_name: rule_name, rule_definition: "" }
       end
     end
@@ -42,16 +41,10 @@ Puppet::Type.type(:f5_irule).provide(:f5_irule, :parent => Puppet::Provider::F5)
 
     rules.each do |rule|
       instances << new(
-        :name       => rule[:rule_name],
+        :definition => rule[:rule_definition],
         :ensure     => :present,
-        :definition => rule[:rule_definition]
+        :name       => rule[:rule_name]
       )
-    end
-
-    rule_names.reject! do |rule_name|
-      rules.find do |rule|
-        rule[:rule_name] == rule_name
-      end
     end
 
     instances
@@ -67,49 +60,34 @@ Puppet::Type.type(:f5_irule).provide(:f5_irule, :parent => Puppet::Provider::F5)
     end
   end
 
-  def exists?
-    @property_hash[:ensure] == :present
-  end
-
-  def create
-    @property_flush[:ensure]     = :create
-    @property_flush[:definition] = resource[:definition]
-  end
-
-  def destroy
-    @property_flush[:ensure] = :destroy
-  end
-
-  def definition=(value)
-    @property_flush[:definition] = value
-  end
-
   def flush
-    partition = File.dirname(resource[:name])
-    rule = {
-      rules: {
-        item: {
-          rule_name: resource[:name],
-          rule_definition: @property_flush[:definition]
-        }
-      }
-    }
-
-    set_activefolder(partition)
+    @rule = { rule_name: resource[:name],
+              rule_definition: @property_flush[:definition] }
+    set_activefolder('/Common')
 
     if @property_flush[:ensure] == :destroy
-      transport[wsdl].call(:delete_rule, message: rule)
+      soapcall(:delete_rule)
       return
     end
 
     if @property_flush[:ensure] == :create
-      transport[wsdl].call(:create, message: rule)
+      transport[wsdl].call(:create)
     else
-      unless @property_flush[:definition].nil?
-        transport[wsdl].call(:modify_rule, message: rule)
+      if !@property_flush[:definition].nil?
+        soapcall(:modify_rule)
       end
     end
 
     @property_hash = resource.to_hash
+  end
+
+  ###########################################################################
+  # Soap caller (TODO: This should be moved to Provider::F5)
+  ###########################################################################
+  def soapcall(method, key=nil, value=nil, nest=false)
+    soapitem = nest ? { item: { item: value } } : { item:  value }
+
+    message = key.nil? ?  @rule : @rule.merge(key => soapitem)
+    transport[wsdl].call(method, message: message)
   end
 end
