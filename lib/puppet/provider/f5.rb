@@ -146,21 +146,27 @@ class Puppet::Provider::F5 < Puppet::Provider
     transport['System.Session'].call(:rollback_transaction)
   end
 
-  def self.soapget_names(method=:get_list)
-    @names ||= arraywrap(transport[wsdl].get(method))
+  # Convenience wrapper to do soap calls that return a response.
+  def self.soapget(method, message=nil)
+    arraywrap(transport[wsdl].get(method, message))
   end
 
-  def self.soapget(method, key, names=soapget_names)
-    message = { key => { item: names} }
-    arraywrap(transport[wsdl].get(method, message))
+  # Get a list of F5 objects, usually names
+  def self.soapget_names(method=:get_list)
+    @names ||= soapget(method)
+  end
+
+  # Get attributes belonging to F5 object(s) 
+  def self.soapget_attribute(method, key, names=soapget_names)
+    soapget(method, { key => { item: names} })
   end
 
   # Cleans up nested item responses from savon and returns a list of lists of
   # attributes, with optionally extracted item 'key'.
-  # This method requires an override of soapget() that sets its key parameter.
+  # This method requires an override of soapget_attribute() that sets its key parameter.
   def self.soapget_listlist(method, key=nil, message=nil)
     if message.nil?
-      listlist = soapget(method.intern)
+      listlist = soapget_attribute(method.intern)
     else
       listlist = arraywrap(transport[wsdl].get(method, message))
     end

@@ -32,7 +32,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     self.class.wsdl
   end
 
-  def self.soapget(method)
+  def self.soapget_attribute(method)
     super(method, :virtual_servers)
   end
 
@@ -46,7 +46,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     ##############################
     addresses = []
     ports     = []
-    soapget(:get_destination).each do |dest|
+    soapget_attribute(:get_destination).each do |dest|
       addresses << dest[:address]
       ports     << dest[:port]
     end
@@ -55,12 +55,12 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     # Descriptions
     ##############################
     descriptions =
-      soapget(:get_description).map { |desc| desc.nil? ? "" : desc }
+      soapget_attribute(:get_description).map { |desc| desc.nil? ? "" : desc }
 
     ##############################
     # Default pools
     ##############################
-    default_pools = soapget(:get_default_pool_name)
+    default_pools = soapget_attribute(:get_default_pool_name)
 
     ##############################
     # Authentication profiles
@@ -70,10 +70,10 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     ##############################
     # Persistence profiles
     ##############################
-    fallback_persistence_profiles = soapget(:get_fallback_persistence_profile)
+    fallback_persistence_profiles = soapget_attribute(:get_fallback_persistence_profile)
 
     persistence_profiles = []
-    soapget(:get_persistence_profile).each do |profile_list|
+    soapget_attribute(:get_persistence_profile).each do |profile_list|
       if !profile_list.nil?
         default_profile = profile_list.find{ |profile| profile[:default_profile] == true }
         persistence_profiles << default_profile[:profile_name]
@@ -86,7 +86,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     # Other profiles
     ##############################
     profileslistlist =
-      soapget(:get_profile).map { |profiles| arraywrap(profiles[:item]) }
+      soapget_attribute(:get_profile).map { |profiles| arraywrap(profiles[:item]) }
 
     ftpprofiles             = Array.new(profileslistlist.size, nil)
     httpprofiles            = Array.new(profileslistlist.size, nil)
@@ -142,12 +142,12 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     ##############################
     # Source address translation
     ##############################
-    snat_types = soapget(:get_source_address_translation_type)
+    snat_types = soapget_attribute(:get_source_address_translation_type)
     source_address_translation = soapget_names.each_index.map do |idx|
       # Return snat pool name if source address translation is set to
       # 'SNATPOOL', otherwise return the type.
       if snat_types[idx] == 'SRC_TRANS_SNATPOOL'
-        snat_pools ||= soapget(:get_source_address_translation_snat_pool)
+        snat_pools ||= soapget_attribute(:get_source_address_translation_snat_pool)
         snat_pools[idx]
       else
         # Return just the type instead of the whole 'SRC_TRANS_*' bit
@@ -159,10 +159,10 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     # Protocols/Types/Wildmasks
     ##############################
     protocols =
-      soapget(:get_protocol).map { |prot| prot.gsub("PROTOCOL_", "") }
+      soapget_attribute(:get_protocol).map { |prot| prot.gsub("PROTOCOL_", "") }
     types =
-      soapget(:get_type).map { |type| type.gsub("RESOURCE_TYPE_", "") }
-    wildmasks = soapget(:get_wildmask)
+      soapget_attribute(:get_type).map { |type| type.gsub("RESOURCE_TYPE_", "") }
+    wildmasks = soapget_attribute(:get_wildmask)
 
     ##############################
     # Irules

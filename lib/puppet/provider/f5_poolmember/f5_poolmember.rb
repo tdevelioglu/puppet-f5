@@ -30,7 +30,7 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
       :get_member_v2, nil, { pool_names: { item: soapget_pools } })
   end
 
-  def self.soapget(method)
+  def self.soapget_attribute(method)
     getmsg  = { pool_names: { item: soapget_pools }, members: { item: soapget_names } }
     arraywrap(transport[wsdl].get(method, getmsg))
   end

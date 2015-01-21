@@ -21,7 +21,7 @@ Puppet::Type.type(:f5_pool).provide(:f5_pool, :parent => Puppet::Provider::F5) d
     self.class.wsdl
   end
 
-  def self.soapget(method)
+  def self.soapget_attribute(method)
     super(method, :pool_names)
   end
 
@@ -30,17 +30,17 @@ Puppet::Type.type(:f5_pool).provide(:f5_pool, :parent => Puppet::Provider::F5) d
     set_activefolder('/')
     enable_recursive_query
 
-    descriptions = soapget(:get_description).collect do |desc|
+    descriptions = soapget_attribute(:get_description).collect do |desc|
       desc.nil? ? "" : desc
     end
 
-    lb_methods = soapget(:get_lb_method)
-    members    = soapget(:get_member_v2).collect do |x|
+    lb_methods = soapget_attribute(:get_lb_method)
+    members    = soapget_attribute(:get_member_v2).collect do |x|
       x.nil? ? [] : arraywrap(x[:item])
     end
 
     health_monitors =
-      soapget(:get_monitor_association).collect do |monitor|
+      soapget_attribute(:get_monitor_association).collect do |monitor|
         if monitor[:monitor_rule][:monitor_templates].nil?
           []
         else

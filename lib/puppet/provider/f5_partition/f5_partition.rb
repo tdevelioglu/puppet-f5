@@ -21,7 +21,7 @@ Puppet::Type.type(:f5_partition).provide(:f5_partition, :parent => Puppet::Provi
     self.class.wsdl
   end
 
-  def self.soapget(method)
+  def self.soapget_attribute(method)
     super(method, :folders)
   end
 
@@ -29,9 +29,9 @@ Puppet::Type.type(:f5_partition).provide(:f5_partition, :parent => Puppet::Provi
     set_activefolder('/')
     enable_recursive_query
 
-    descriptions   = soapget(:get_description).collect { |desc| desc.nil? ? "" : desc }
-    device_groups  = soapget(:get_device_group)
-    traffic_groups = soapget(:get_traffic_group)
+    descriptions   = soapget_attribute(:get_description).collect { |desc| desc.nil? ? "" : desc }
+    device_groups  = soapget_attribute(:get_device_group)
+    traffic_groups = soapget_attribute(:get_traffic_group)
 
     instances = []
     soapget_names.each_index do |x|

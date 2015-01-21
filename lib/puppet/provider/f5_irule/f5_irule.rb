@@ -26,8 +26,8 @@ Puppet::Type.type(:f5_irule).provide(:f5_irule, :parent => Puppet::Provider::F5)
     set_activefolder('/')
     enable_recursive_query
 
-    rule_names = soapget_names(:get_list)
-    rules      = arraywrap(transport[wsdl].get(:query_all_rules))
+    rule_names = soapget_names
+    rules      = soapget(:query_all_rules)
 
     # We need to add the rules that have an empty definition as those are not
     # returned by query_all_rules.
