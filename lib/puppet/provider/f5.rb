@@ -168,7 +168,7 @@ class Puppet::Provider::F5 < Puppet::Provider
     if message.nil?
       listlist = soapget_attribute(method.intern)
     else
-      listlist = arraywrap(transport[wsdl].get(method, message))
+      listlist = soapget(method, message)
     end
 
     if listlist.empty?
