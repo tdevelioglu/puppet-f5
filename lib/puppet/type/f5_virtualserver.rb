@@ -360,9 +360,9 @@ Puppet::Type.newtype(:f5_virtualserver) do
       value = [value] unless value.is_a?(Array)
 
       value.each do |item|
-        unless Puppet::Util.absolute_path?(value)
+        unless Puppet::Util.absolute_path?(item)
           fail Puppet::Error, "Parameter 'atcreate_auth_profiles' must be"\
-            " a fully qualified path, not '#{value}'"
+            " a fully qualified path, not '#{item}'"
         end
       end
     end
@@ -445,9 +445,9 @@ Puppet::Type.newtype(:f5_virtualserver) do
       value = [value] unless value.is_a?(Array)
 
       value.each do |item|
-        unless Puppet::Util.absolute_path?(value)
+        unless Puppet::Util.absolute_path?(item)
           fail Puppet::Error, "Parameter 'atcreate_ssl_profiles_client' must be"\
-            " a fully qualified path, not '#{value}'"
+            " a fully qualified path, not '#{item}'"
         end
       end
     end
@@ -458,9 +458,9 @@ Puppet::Type.newtype(:f5_virtualserver) do
       value = [value] unless value.is_a?(Array)
 
       value.each do |item|
-        unless Puppet::Util.absolute_path?(value)
+        unless Puppet::Util.absolute_path?(item)
           fail Puppet::Error, "Parameter 'atcreate_ssl_profiles_server' must be"\
-            " a fully qualified path, not '#{value}'"
+            " a fully qualified path, not '#{item}'"
         end
       end
     end
@@ -498,9 +498,9 @@ Puppet::Type.newtype(:f5_virtualserver) do
       value = [value] unless value.is_a?(Array)
 
       value.each do |item|
-        unless Puppet::Util.absolute_path?(value)
+        unless Puppet::Util.absolute_path?(item)
           fail Puppet::Error, "Parameter 'atcreate_rules' must be"\
-            " a fully qualified path, not '#{value}'"
+            " a fully qualified path, not '#{item}'"
         end
       end
     end

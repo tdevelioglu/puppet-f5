@@ -155,8 +155,8 @@ Puppet::Type.newtype(:f5_pool) do
     validate do |value|
       value = [value] unless value.is_a?(Array)
       value.each do |item|
-        unless value.is_a?(Hash)
-          fail Puppet::Error, "Members must be hashes, not #{value}"
+        unless item.is_a?(Hash)
+          fail Puppet::Error, "Members must be hashes, not #{item}"
         end
 
         unless Puppet::Util.absolute_path?(value["address"])

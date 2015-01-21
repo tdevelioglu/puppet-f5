@@ -159,7 +159,7 @@ Puppet::Type.newtype(:f5_node) do
       value.each do |item|
         unless Puppet::Util.absolute_path?(item) || item == "none" || item == "default"
           fail Puppet::Error, "'atcreate_health_monitors' must be fully"\
-            "qualified (e.g. '/Common/http'), not '#{value}'"
+            "qualified (e.g. '/Common/http'), not '#{item}'"
         end
       end
     end
