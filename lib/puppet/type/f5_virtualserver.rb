@@ -555,14 +555,13 @@ Puppet::Type.newtype(:f5_virtualserver) do
   ###########################################################################
   validate do
     if self[:ensure] == :present
-      if self[:address].nil?
+      if self[:address].nil? && self[:atcreate_address].nil?
         fail Puppet::Error, "Parameter 'address' must be defined"
       end
 
-      if self[:port].nil?
+      if self[:port].nil? && self[:atcreate_port].nil?
         fail Puppet::Error, "Parameter 'port' must be defined"
       end
-
     end
   end
 
