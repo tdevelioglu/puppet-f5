@@ -27,7 +27,10 @@ Puppet::Type.type(:f5_irule).provide(:f5_irule, :parent => Puppet::Provider::F5)
     enable_recursive_query
 
     rule_names = soapget_names
-    rules      = soapget(:query_all_rules)
+    # We need to revert from nokogiri to rexml because nori has a bug
+    # in the nokogiri parser that removes whitespaces between tags in the
+    # response.
+    rules      = soapget(:query_all_rules, nil, :rexml)
 
     # We need to add the rules that have an empty definition as those are not
     # returned by query_all_rules.

@@ -4,11 +4,13 @@ require 'savon'
 
 module Savon
   class Client
-    def get(call, message=nil)
+    def get(call, message=nil, response_parser=nil)
       if message
-        reply = self.call(call, message: message).body["#{call}_response".to_sym]
+        call_options = { message: message, response_parser: response_parser }
+        reply = self.call(call, call_options).body["#{call}_response".to_sym]
       else
-        reply = self.call(call).body["#{call}_response".to_sym]
+        call_options = { response_parser: response_parser }
+        reply = self.call(call, call_options).body["#{call}_response".to_sym]
       end
 
       # Attempt to divine the appropriate repsonse from the reply message.

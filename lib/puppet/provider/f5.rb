@@ -147,8 +147,8 @@ class Puppet::Provider::F5 < Puppet::Provider
   end
 
   # Convenience wrapper to do soap calls that return a response.
-  def self.soapget(method, message=nil)
-    arraywrap(transport[wsdl].get(method, message))
+  def self.soapget(method, message=nil, response_parser=nil)
+    arraywrap(transport[wsdl].get(method, message, response_parser))
   end
 
   # Get a list of F5 objects, usually names
