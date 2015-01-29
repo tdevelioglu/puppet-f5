@@ -64,8 +64,8 @@ Puppet::Type.type(:f5_irule).provide(:f5_irule, :parent => Puppet::Provider::F5)
   end
 
   def flush
-    @rule = { rule_name: resource[:name],
-              rule_definition: @property_flush[:definition] }
+    @rule = { rules: { item: { rule_name: resource[:name],
+              rule_definition: @property_flush[:definition] } } }
     set_activefolder('/Common')
 
     if @property_flush[:ensure] == :destroy
@@ -74,7 +74,7 @@ Puppet::Type.type(:f5_irule).provide(:f5_irule, :parent => Puppet::Provider::F5)
     end
 
     if @property_flush[:ensure] == :create
-      transport[wsdl].call(:create)
+      soapcall(:create)
     else
       if !@property_flush[:definition].nil?
         soapcall(:modify_rule)
