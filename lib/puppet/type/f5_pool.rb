@@ -159,8 +159,8 @@ Puppet::Type.newtype(:f5_pool) do
           fail Puppet::Error, "Members must be hashes, not #{item}"
         end
 
-        unless Puppet::Util.absolute_path?(value["address"])
-          fail Puppet::Error, "Member names must be fully qualified, not '#{value["address"]}'"
+        unless Puppet::Util.absolute_path?(item["address"])
+          fail Puppet::Error, "Member names must be fully qualified, not '#{item["address"]}'"
         end
       end
     end
