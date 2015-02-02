@@ -307,7 +307,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
 
         # Pass empty hash if no profiles are declared to keep
         # API happy. Saves us from having to determine a default.
-        if @property_flush[:profiles].nil? || @property_flush[:profiles].empty?
+        if !flush_profiles?
           vs_profiles = {}
         else
           vs_profiles = { item: all_profiles(@property_flush) }
