@@ -87,7 +87,7 @@ Puppet::Type.type(:f5_pool).provide(:f5_pool, :parent => Puppet::Provider::F5) d
       ##############################
       if @property_flush[:ensure] == :create
         message = @pool.merge(lb_methods: { item: "LB_METHOD_#{@property_flush[:lb_method]}" },
-                             members: { item: @property_flush[:members] })
+                             members: { item: { item: @property_flush[:members] }})
         transport[wsdl].call(:create_v2, message: message)
       else
       ##############################
