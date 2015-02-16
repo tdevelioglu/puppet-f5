@@ -569,12 +569,14 @@ Puppet::Type.newtype(:f5_virtualserver) do
     File.dirname(self[:name]) 
   end
 
-  autorequire(:f5_profile) do
-    self[:profiles] unless (self[:profiles].nil? self[:profiles].empty?)
-  end
+  # TODO: Autorequire all profiles
 
   autorequire(:f5_pool) do
-    self[:default_pool] unless (self[:default_pool].nil? || self[:default_pool].empty?)
+    if !(self[:default_pool].nil? || self[:default_pool].empty?)
+      self[:default_pool]
+    elsif !(self[:atcreate_default_pool].nil? || self[:atcreate_default_pool].empty?)
+      self[:atcreate_default_pool]
+    end
   end
 
 end
