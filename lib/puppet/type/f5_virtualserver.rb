@@ -366,6 +366,10 @@ Puppet::Type.newtype(:f5_virtualserver) do
         end
       end
     end
+
+    munge do |value|
+      [value] unless value.is_a?(Array)
+    end
   end
 
   newparam(:atcreate_ftp_profile) do
@@ -451,6 +455,10 @@ Puppet::Type.newtype(:f5_virtualserver) do
         end
       end
     end
+
+    munge do |value|
+      [value] unless value.is_a?(Array)
+    end
   end
 
   newparam(:atcreate_ssl_profiles_server) do
@@ -463,6 +471,10 @@ Puppet::Type.newtype(:f5_virtualserver) do
             " a fully qualified path, not '#{item}'"
         end
       end
+    end
+
+    munge do |value|
+      [value] unless value.is_a?(Array)
     end
   end
 
@@ -503,6 +515,11 @@ Puppet::Type.newtype(:f5_virtualserver) do
             " a fully qualified path, not '#{item}'"
         end
       end
+
+    end
+
+    munge do |value|
+      [value] unless value.is_a?(Array)
     end
   end
 
