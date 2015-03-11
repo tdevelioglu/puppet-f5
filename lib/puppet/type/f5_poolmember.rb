@@ -140,6 +140,21 @@ Puppet::Type.newtype(:f5_poolmember) do
     end
   end
 
+  newproperty(:session_status) do
+    desc "Session status of the poolmember."
+
+    munge do |value|
+      value.upcase
+    end
+
+    validate do |value|
+      unless /^(DISABLED|ENABLED)$/i.match(value)
+        fail Puppet::Error, "session_status must be either
+          disabled or enabled, not #{value}"
+      end
+    end
+  end
+
   ###########################################################################
   # Parameters used at creation.
   ###########################################################################
@@ -194,6 +209,21 @@ Puppet::Type.newtype(:f5_poolmember) do
         Integer(value)
       rescue
         fail Puppet::Error, "'atcreate_port' must be a number, not '#{value}'"
+      end
+    end
+  end
+
+  newparam(:atcreate_session_status) do
+    desc "The session status of the poolmember at creation."
+
+    munge do |value|
+      value.upcase
+    end
+
+    validate do |value|
+      unless /^(DISABLED|ENABLED)$/i.match(value)
+        fail Puppet::Error, "atcreate_session_status must be either
+          disabled or enabled, not '#{value}'"
       end
     end
   end

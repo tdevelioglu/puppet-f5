@@ -21,26 +21,6 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
     self.class.wsdl
   end
 
-  # The F5 api is confusing when it comes to getting and setting the
-  # session_enabled_state, session_status or whatever it's now called. 
-  #
-  # Corresponding getter and setter methods are inconsistent, so we're using:
-  #
-  # get_session_status: (SESSION_STATUS_ENABLED, SESSION_STATUS_DISABLED,
-  # SESSION_STATUS_FORCED_OFFLINE) and
-  #
-  # set_session_enabled_state: (STATE_ENABLED, STATE_DISABLED)
-  #
-  # to set what's the 'state' button in the UI and hope for the best.
-  #
-  def self.session_status_to_property(status)
-    /(ENABLED|DISABLED)/.match(status)[0]
-  end
-
-  def self.property_to_session_enabled_state(property)
-    'STATE_' + property
-  end
-
   def self.monitor_rule_to_property(monitor_rule)
     if monitor_rule[:monitor_templates].nil?
       ["default"]

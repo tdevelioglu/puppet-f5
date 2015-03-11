@@ -46,6 +46,7 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
     priority_groups   = soapget_listlist(:get_member_priority)
     rate_limits       = soapget_listlist(:get_member_rate_limit)
     ratios            = soapget_listlist(:get_member_ratio)
+    session_status    = soapget_listlist(:get_member_session_status)
 
     soapget_names.each_with_index do |pmlist, idx1|
       pmlist.each_with_index do |pm, idx2|
@@ -59,6 +60,7 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
           :priority_group   => priority_groups[idx1][idx2],
           :rate_limit       => rate_limits[idx1][idx2],
           :ratio            => ratios[idx1][idx2],
+          :session_status   => session_status_to_property(session_status[idx1][idx2]),
         )
       end
     end
@@ -112,6 +114,11 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
       end
       if !@property_flush[:ratio].nil?
         soapcall(:set_member_ratio, :ratios, @property_flush[:ratio])
+      end
+      if !@property_flush[:session_status].nil?
+        soapcall(:set_member_session_enabled_state, :session_states,
+                 self.class.property_to_session_enabled_state(
+                   @property_flush[:session_status]))
       end
       submit_transaction
     rescue Exception => e
