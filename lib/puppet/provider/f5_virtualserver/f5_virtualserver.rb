@@ -1,7 +1,7 @@
 require 'puppet/provider/f5'
 
 Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppet::Provider::F5) do
-  @doc = "Manages f5 irules"
+  @doc = "Manages f5 virtualservers"
 
   mk_resource_methods
 

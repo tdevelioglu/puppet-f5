@@ -368,7 +368,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     end
 
     munge do |value|
-      [value] unless value.is_a?(Array)
+      value.is_a?(Array) ? value : [value]
     end
   end
 
@@ -457,7 +457,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     end
 
     munge do |value|
-      [value] unless value.is_a?(Array)
+      value.is_a?(Array) ? value : [value]
     end
   end
 
@@ -474,7 +474,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     end
 
     munge do |value|
-      [value] unless value.is_a?(Array)
+      value.is_a?(Array) ? value : [value]
     end
   end
 
@@ -519,7 +519,7 @@ Puppet::Type.newtype(:f5_virtualserver) do
     end
 
     munge do |value|
-      [value] unless value.is_a?(Array)
+      value.is_a?(Array) ? value : [value]
     end
   end
 
