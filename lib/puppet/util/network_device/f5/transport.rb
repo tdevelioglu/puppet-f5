@@ -80,13 +80,15 @@ module Puppet::Util::NetworkDevice::F5
         # We use + here to ensure no / between wsdl and .wsdl
         wsdl_path = File.join(@directory, wsdl + '.wsdl')
 
+        http_headers = @sessionid.nil? ? {} : { 'X-iControl-Session' => @sessionid  }
+        Puppet.debug("My http headers are: #{http_headers}")
         if File.exists? wsdl_path
           namespace = 'urn:iControl:' + wsdl.gsub(/(.*)\.(.*)/, '\1/\2')
           url = 'https://' + @hostname + '/' + @endpoint
           @interfaces[wsdl] = Savon.client(wsdl: wsdl_path, ssl_verify_mode: :none,
             basic_auth: [@username, @password], endpoint: url,
             namespace: namespace, convert_request_keys_to: :none,
-            strip_namespaces: true, log: false, headers: { 'X-iControl-Session' => @sessionid  },
+            strip_namespaces: true, log: false, headers: http_headers,
             :convert_attributes_to => lambda {|k,v| []})
         end
     end
