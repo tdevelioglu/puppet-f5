@@ -75,7 +75,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     persistence_profiles = []
     soapget_attribute(:get_persistence_profile).each do |profile_list|
       if !profile_list.nil?
-        default_profile = profile_list.find{ |profile| profile[:default_profile] == true }
+        default_profile = arraywrap(profile_list[:item]).find{ |profile| profile[:default_profile] == true }
         persistence_profiles << default_profile[:profile_name]
       else
         persistence_profiles << nil
