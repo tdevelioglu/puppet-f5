@@ -170,7 +170,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     # We need to order the rules in the list by their priority because we map
     # order to priority during set.
     rules = soapget_listlist(:get_rule).map do |rulelist|
-      rulelist.sort { |rule| rule[:priority].to_i }.map { |x| x[:rule_name] }
+      rulelist.sort_by { |rule| rule[:priority].to_i }.map { |x| x[:rule_name] }
     end
 
     ##############################
