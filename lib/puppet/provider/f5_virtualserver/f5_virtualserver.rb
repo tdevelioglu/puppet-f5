@@ -60,7 +60,7 @@ Puppet::Type.type(:f5_virtualserver).provide(:f5_virtualserver, :parent => Puppe
     ##############################
     # Default pools
     ##############################
-    default_pools = soapget_attribute(:get_default_pool_name)
+    default_pools = soapget_attribute(:get_default_pool_name).map { |pool| pool.nil? ? "" : pool }
 
     ##############################
     # Authentication profiles
