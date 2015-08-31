@@ -36,7 +36,13 @@ class Puppet::Util::NetworkDevice::F5::Facts
     # first is a bunch of key/value pairs.  However, if the key is versions
     # then we want to iterate a subarray of hashes (it gets messy in SOAP)
     # to get the rest of the facts we need here.
-    hardware_info = @transport[F5_WSDL].call(:get_hardware_information).body[:get_hardware_information_response][:return][:item]
+    #
+    # We need to fall back to rexml instead of nokogiri here again because
+    # of utf shenanigans (i.e. "\u0001CNN35x-MC-SSL-0014").
+    # This is likely F5's fault but rexml is less strict.
+    hardware_info = @transport[F5_WSDL].call(
+      :get_hardware_information, response_parser: :rexml).body[
+        :get_hardware_information_response][:return][:item]
     hardware_info.each do |component|
       name  = component[:name]
       type  = component[:type]
@@ -56,7 +62,8 @@ class Puppet::Util::NetworkDevice::F5::Facts
 
       versions.each do |version|
           version_name = version[:name].delete(' ').downcase
-          @facts["hardware_#{name}_#{version_name}"] = version[:value]
+          @facts["hardware_#{name}_#{version_name}"] =
+            version[:value].delete("\u0001") # strip (utf) garbage
       end
     end
 
