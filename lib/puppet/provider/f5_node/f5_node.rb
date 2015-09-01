@@ -50,48 +50,6 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
     { monitor_templates: templates, quorum: quorum, type: type }
   end
 
-  def self.delete_poolmembers(node)
-    wsdl = 'LocalLB.Pool'
-
-    set_activefolder('/')
-    transport['System.Session'].call(:set_recursive_query_state, message: { state: 'STATE_ENABLED' })
-
-    all_pools       = arraywrap(transport[wsdl].get(:get_list))
-    all_poolmembers = arraywrap(transport[wsdl].get(:get_member_v2, { pool_names: { item: all_pools } }))
-
-    found_pools   = []
-    found_members = []
-    all_pools.each_with_index do |pool, index|
-      poolmembers = arraywrap(all_poolmembers[index][:item])
-
-      if poolmembers.nil?
-        next
-      end
-
-      found = []
-      poolmembers.each do |member|
-        if member["address"] == node
-          found << member
-        end
-      end
-
-      unless found.empty?
-        found_pools << pool
-        found_members << found
-      end
-      
-    end
-
-    if ! found_pools.empty?
-      set_activefolder('/Common')
-      transport[wsdl].call(:remove_member_v2, message: { pool_names: { item: found_pools }, members: { item: found_members } })
-
-      # restore system settings
-      set_activefolder(partition)
-      transport['System.Session'].call(:set_recursive_query_state, message: { state: recursive })
-    end
-  end
-
   def self.instances
     # Getting all node info from an F5 is not transactional. But we're safe as
     # long as we are the only one doing writes.
@@ -150,20 +108,7 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
     set_activefolder('/Common')
 
     if @property_flush[:ensure] == :destroy
-      begin
-        start_transaction
-        self.class.delete_poolmembers(resource[:name])
-        soapcall(:delete_node_address)
-        submit_transaction
-      rescue Exception => e
-        begin
-          rollback_transaction
-        rescue Exception => e
-          if !e.message.include?("No transaction is open to roll back")
-            raise
-          end
-        end
-      end
+      soapcall(:delete_node_address)
       return
     end
 
