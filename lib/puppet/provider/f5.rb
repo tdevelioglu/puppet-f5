@@ -135,14 +135,17 @@ class Puppet::Provider::F5 < Puppet::Provider
   end
 
   def start_transaction
+    debug("Starting transaction")
     transport['System.Session'].call(:start_transaction)
   end
 
   def submit_transaction
+    debug("Submitting transaction")
     transport['System.Session'].call(:submit_transaction)
   end
 
   def rollback_transaction
+    debug("Rolling back transaction")
     transport['System.Session'].call(:rollback_transaction)
   end
 
