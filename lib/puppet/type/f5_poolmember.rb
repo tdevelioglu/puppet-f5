@@ -44,29 +44,14 @@ Puppet::Type.newtype(:f5_poolmember) do
 
   newparam(:node) do
     desc "Deprecated, set as part of resource title instead."
-    validate do |value|
-      Puppet.deprecation_warning('Use of the `node` parameter is deprecated, '\
-        'set node as part of the resource title in the format'\
-        '\"<pool>:<node>:<port>\" instead')
-    end
   end
 
   newparam(:pool) do
     desc "Deprecated, set as part of resource title instead."
-    validate do |value|
-      Puppet.deprecation_warning('Use of the `pool` parameter is deprecated, '\
-        'set pool as part of the resource title in the format'\
-        '\"<pool>:<pool>:<port>\" instead')
-    end
   end
 
   newparam(:port) do
     desc "Deprecated, set as part of resource title instead."
-    validate do |value|
-      Puppet.deprecation_warning('Use of the `port` parameter is deprecated, '\
-        'set port as part of the resource title in the format'\
-        '\"<pool>:<port>:<port>\" instead')
-    end
   end
 
   newproperty(:connection_limit) do

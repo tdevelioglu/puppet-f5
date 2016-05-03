@@ -37,6 +37,8 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
   end
 
   def self.instances
+    return @instances if @instances
+
     debug("Fetching instances")
     instances = []
     set_activefolder('/')
@@ -64,7 +66,7 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
         )
       end
     end
-    instances
+    @instances = instances
   end
 
   def self.prefetch(resources)
