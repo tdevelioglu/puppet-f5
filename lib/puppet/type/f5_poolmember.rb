@@ -8,83 +8,64 @@ Puppet::Type.newtype(:f5_poolmember) do
     defaultto :present
   end
 
-  def initialize(resource)
+  attr_reader :pool, :node, :port
+
+  def initialize(*args)
     super
-    self.title = "#{resource[:pool]}:#{resource[:node]}:#{resource[:port]}"
+    @pool, @node, @port = self[:name].split(':')
   end
 
-  def self.title_patterns
-    [
-      [ /^(([^:]+):([^:]+):([0-9]+))$/m,
-        [
-          [:name, lambda{|x| x}],
-          [:pool, lambda{|x| x}],
-          [:node, lambda{|x| x}],
-          [:port, lambda{|x| x}]
-        ]
-      ],
-      [ /^(([^:]+):([0-9]+))$/m,
-        [
-          [:name, lambda{|x| x }],
-          [:node, lambda{|x| x}],
-          [:port, lambda{|x| x }]
-        ]
-      ],
-      [ /^(([^:]+):([^:]+))$/m,
-        [
-          [:name, lambda{|x| x }],
-          [:pool, lambda{|x| x }],
-          [:node, lambda{|x| x }],
-        ]
-      ],
-      [ /((.*))/m,
-        [
-          [:name, lambda{|x| x }],
-          [:node, lambda{|x| x }]
-        ]
-      ]
-    ]
-  end
- 
   newparam(:name, :namevar=>true) do
     desc "The poolmember name."
 
     validate do |value|
-      unless Puppet::Util.absolute_path?(value)
-        fail Puppet::Error, "Poolmember names must be fully qualified, not '#{value}'"
+      unless value =~ /^[^:]+:[^:]+:\d+$/
+        raise ArgumentError, 'Resource name must follow the format'\
+          ' "<pool>:<node>:<port>"'
+      end
+      pool, node, port = value.split(':')
+
+      unless Puppet::Util.absolute_path?(pool)
+        raise ArgumentError, "pool component of resource title must be fully "\
+           " qualified, not \"#{pool}\""
+      end
+
+      unless Puppet::Util.absolute_path?(node)
+        raise ArgumentError, "node component of resource title must be fully"\
+         " qualified, not \"#{node}\""
+      end
+
+      unless port =~ /\d+/
+        raise ArgumentError, "port component of resource title must be numeric"
+          ", not \"#{port}\""
       end
     end
   end
 
-  newparam(:node, :namevar=>true) do
-    desc "The node. In v11+ this is the node name"
-
+  newparam(:node) do
+    desc "Deprecated, set as part of resource title instead."
     validate do |value|
-      unless Puppet::Util.absolute_path?(value)
-        fail Puppet::Error, "Poolmember node name must be fully qualified, not '#{value}'"
-      end
+      Puppet.deprecation_warning('Use of the `node` parameter is deprecated, '\
+        'set node as part of the resource title in the format'\
+        '\"<pool>:<node>:<port>\" instead')
     end
   end
 
-  newparam(:pool, :namevar => true) do
-    desc "The pool name."
-
+  newparam(:pool) do
+    desc "Deprecated, set as part of resource title instead."
     validate do |value|
-      unless Puppet::Util.absolute_path?(value)
-        fail Puppet::Error, "Pools must be fully qualified, not '#{value}'"
-      end
+      Puppet.deprecation_warning('Use of the `pool` parameter is deprecated, '\
+        'set pool as part of the resource title in the format'\
+        '\"<pool>:<pool>:<port>\" instead')
     end
   end
 
-  newparam(:port, :namevar => true) do
-    desc "The port of the poolmember"
-
-    munge do |value|
-      begin
-        Integer(value)
-      rescue
-        fail Puppet::Error, "'port' must be a number, not '#{value}'"
-      end
+  newparam(:port) do
+    desc "Deprecated, set as part of resource title instead."
+    validate do |value|
+      Puppet.deprecation_warning('Use of the `port` parameter is deprecated, '\
+        'set port as part of the resource title in the format'\
+        '\"<pool>:<port>:<port>\" instead')
     end
   end
 
@@ -231,24 +212,12 @@ Puppet::Type.newtype(:f5_poolmember) do
   ###########################################################################
   # Validation / Autorequire
   ###########################################################################
-  validate do
-    if self[:ensure] == :present
-      if self[:pool].nil?
-        fail Puppet::Error, "Parameter 'pool' must be defined"
-      end
-  
-      if self[:port].nil?
-        fail Puppet::Error, "Parameter 'port' must be defined"
-      end
-    end
-  end
-
   autorequire(:f5_pool) do
-    self[:pool]
+    @pool
   end
 
   autorequire(:f5_node) do
-    self[:node]
+    @node
   end
 
 end

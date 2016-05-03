@@ -37,6 +37,7 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
   end
 
   def self.instances
+    debug("Fetching instances")
     instances = []
     set_activefolder('/')
     enable_recursive_query
@@ -50,11 +51,10 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
 
     soapget_names.each_with_index do |pmlist, idx1|
       pmlist.each_with_index do |pm, idx2|
+        pool, node, port = soapget_pools[idx1], pm[:address], pm[:port]
         instances << new(
           :ensure           => :present,
-          :name             => pm[:address],
-          :pool             => soapget_pools[idx1],
-          :port             => pm[:port],
+          :name             => "#{pool}:#{node}:#{port}",
           :connection_limit => connection_limits[idx1][idx2],
           :description      => descriptions[idx1][idx2] || "",
           :priority_group   => priority_groups[idx1][idx2],
@@ -68,12 +68,10 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
   end
 
   def self.prefetch(resources)
-    instances = instances()
+    poolmembers = instances
 
     resources.each do |name, resource|
-      if provider = instances.find do |prov|
-        "#{prov.pool}:#{prov.name}:#{prov.port}" == resource.title
-      end
+      if provider = poolmembers.find{ |poolmember| poolmember.name == name }
         resource.provider = provider
       end
     end
@@ -83,9 +81,9 @@ Puppet::Type.type(:f5_poolmember).provide(:f5_poolmember, :parent => Puppet::Pro
   # Flush
   ###########################################################################
   def flush
-    addressport = { address: resource[:node], port: resource[:port] }
+    addressport = { address: resource.node, port: resource.port.to_i }
     @poolmember = {
-      pool_names: { item: resource[:pool] },
+      pool_names: { item: resource.pool },
       members:    { item: { item: addressport } }
     }
     set_activefolder('/Common')
