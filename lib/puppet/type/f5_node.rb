@@ -208,12 +208,6 @@ Puppet::Type.newtype(:f5_node) do
   ###########################################################################
   # Validation
   ###########################################################################
-  validate do
-    if self[:ensure] != :absent and self[:ipaddress].nil?
-      fail('ipaddress is required when ensure is present')
-    end
-  end
-
   autorequire(:f5_partition) do
     File.dirname(self[:name]) 
   end

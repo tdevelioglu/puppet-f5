@@ -115,6 +115,9 @@ Puppet::Type.type(:f5_node).provide(:f5_node, :parent => Puppet::Provider::F5) d
     begin
       start_transaction
       if @property_flush[:ensure] == :create
+        if resource[:ipaddress].nil?
+          resource.fail("Parameter `ipaddress` is required when creating resource")
+        end
         message = @node.merge(addresses: { item: resource[:ipaddress] },
           limits: { item: @property_flush[:connection_limit] })
         transport[wsdl].call(:create, message: message)
