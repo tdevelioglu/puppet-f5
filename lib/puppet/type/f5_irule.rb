@@ -20,6 +20,28 @@ Puppet::Type.newtype(:f5_irule) do
 
   newproperty(:definition) do
     desc "The definition of the irule."
+
+    def change_to_s(current, desired)
+      if Puppet.features.diff? then
+        require 'puppet/util/ldiff'
+
+        noop_tag=(@resource.noop?)? ' (noop)':''
+        if current == :absent or current.nil?
+          return "created#{noop_tag}"
+        elsif desired == :absent
+          return "removed#{noop_tag}"
+        else
+          return "changed#{noop_tag}:\n#{::Puppet::Util::Ldiff.diff(current,desired)}"
+        end
+      else
+        # Fallback to default
+        super
+      end
+    end
+
+    # Get rid of redundant messages in noop mode
+    def noop
+    end
   end
 
   autorequire(:f5_partition) do
